@@ -49,16 +49,37 @@ function generateShades(baseColor: string, count: number): string[] {
 }
 
 export function CategoryBreakdown() {
-  const { state, setSelectedCategory, getTotalByCategory } = useBudget();
+  const {
+    state,
+    setSelectedCategory,
+    getTotalByCategory,
+    getTotalIncome,
+    getUnbudgetedAmount,
+  } = useBudget();
 
   const selectedCategory = state.selectedCategory;
-  const config = selectedCategory ? CATEGORY_CONFIG[selectedCategory] : null;
-  const items = selectedCategory
+  const isUnbudgeted = selectedCategory === "unbudgeted";
+
+  // For unbudgeted, show income sources
+  const config = isUnbudgeted
+    ? CATEGORY_CONFIG.income
+    : selectedCategory
+    ? CATEGORY_CONFIG[selectedCategory]
+    : null;
+
+  const items = isUnbudgeted
+    ? state.categories.income.items
+    : selectedCategory
     ? state.categories[selectedCategory].items
     : [];
-  const categoryTotal = selectedCategory
+
+  const categoryTotal = isUnbudgeted
+    ? getTotalIncome()
+    : selectedCategory
     ? getTotalByCategory(selectedCategory)
     : 0;
+
+  const unbudgetedAmount = getUnbudgetedAmount();
 
   const chartData: ItemChartData[] = useMemo(
     () =>
@@ -98,7 +119,7 @@ export function CategoryBreakdown() {
               transition={{ delay: 0.1 }}
             >
               <CardTitle className="text-lg">
-                {config.label} Breakdown
+                {isUnbudgeted ? "Income Sources" : `${config.label} Breakdown`}
               </CardTitle>
             </motion.div>
             <motion.div
@@ -116,14 +137,30 @@ export function CategoryBreakdown() {
               </Button>
             </motion.div>
           </div>
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
-            className="text-sm text-muted-foreground"
-          >
-            Total: {formatCurrency(categoryTotal)}
-          </motion.p>
+          <div className="space-y-1">
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.2 }}
+              className="text-sm text-muted-foreground"
+            >
+              Total: {formatCurrency(categoryTotal)}
+            </motion.p>
+            {isUnbudgeted && (
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.25 }}
+                className="text-xs text-muted-foreground"
+              >
+                Unbudgeted: {formatCurrency(unbudgetedAmount)} (
+                {categoryTotal > 0
+                  ? ((unbudgetedAmount / categoryTotal) * 100).toFixed(1)
+                  : 0}
+                %)
+              </motion.p>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {items.length === 0 ? (

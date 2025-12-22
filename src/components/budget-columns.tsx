@@ -4,11 +4,11 @@ import { motion } from "framer-motion";
 import { BudgetColumn } from "./budget-column";
 import { CategoryName } from "@/types/budget";
 
-const CATEGORIES: CategoryName[] = ["needs", "wants", "savings"];
+const CATEGORIES: CategoryName[] = ["income", "needs", "wants", "savings"];
 
 export function BudgetColumns() {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
       {CATEGORIES.map((category, index) => (
         <motion.div
           key={category}

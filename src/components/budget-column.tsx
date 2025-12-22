@@ -25,6 +25,7 @@ export const BudgetColumn = memo(function BudgetColumn({
   const items = state.categories[category].items;
   const total = getTotalByCategory(category);
   const percentage = getPercentageByCategory(category);
+  const isIncome = category === "income";
 
   return (
     <Card
@@ -36,19 +37,21 @@ export const BudgetColumn = memo(function BudgetColumn({
           <CardTitle className="text-lg font-semibold">
             {config.label}
           </CardTitle>
-          <span
-            className="text-xs font-medium px-2 py-1 rounded-full"
-            style={{
-              backgroundColor: `${config.color}20`,
-              color: config.color,
-            }}
-          >
-            Target: {config.targetPercentage}%
-          </span>
+          {!isIncome && (
+            <span
+              className="text-xs font-medium px-2 py-1 rounded-full"
+              style={{
+                backgroundColor: `${config.color}20`,
+                color: config.color,
+              }}
+            >
+              Target: {config.targetPercentage}%
+            </span>
+          )}
         </div>
         <div className="flex items-baseline gap-2 mt-2">
           <span className="text-2xl font-bold">{formatCurrency(total)}</span>
-          {percentage > 0 && (
+          {!isIncome && percentage > 0 && (
             <span
               className="text-sm font-medium"
               style={{

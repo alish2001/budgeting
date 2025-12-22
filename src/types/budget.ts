@@ -4,7 +4,8 @@ export interface BudgetItem {
   amount: number;
 }
 
-export type CategoryName = 'needs' | 'wants' | 'savings';
+export type CategoryName = "needs" | "wants" | "savings" | "income";
+export type SpendingCategoryName = "needs" | "wants" | "savings";
 
 export interface BudgetCategory {
   name: CategoryName;
@@ -15,12 +16,16 @@ export interface BudgetCategory {
 
 export interface BudgetState {
   categories: Record<CategoryName, BudgetCategory>;
-  selectedCategory: CategoryName | null;
+  selectedCategory: CategoryName | "unbudgeted" | null;
 }
 
-export const CATEGORY_CONFIG: Record<CategoryName, { targetPercentage: number; color: string; label: string }> = {
-  needs: { targetPercentage: 50, color: '#ef4444', label: 'Needs' },
-  wants: { targetPercentage: 30, color: '#3b82f6', label: 'Wants' },
-  savings: { targetPercentage: 20, color: '#22c55e', label: 'Savings' },
+export const CATEGORY_CONFIG: Record<
+  CategoryName,
+  { targetPercentage: number; color: string; label: string }
+> = {
+  needs: { targetPercentage: 50, color: "#ef4444", label: "Needs" },
+  wants: { targetPercentage: 30, color: "#3b82f6", label: "Wants" },
+  savings: { targetPercentage: 20, color: "#22c55e", label: "Savings" },
+  income: { targetPercentage: 0, color: "#8b5cf6", label: "Income" },
 };
 

@@ -5,16 +5,23 @@ import { BudgetProvider, useBudget } from "@/lib/budget-context";
 import { BudgetColumns } from "@/components/budget-columns";
 import { BudgetPieChart } from "@/components/budget-pie-chart";
 import { CategoryBreakdown } from "@/components/category-breakdown";
-import { CATEGORY_CONFIG, CategoryName } from "@/types/budget";
+import {
+  CATEGORY_CONFIG,
+  CategoryName,
+  SpendingCategoryName,
+} from "@/types/budget";
 import { Button } from "@/components/ui/button";
+import { formatCurrency } from "@/lib/utils";
 
 function BudgetComparison() {
-  const { getPercentageByCategory, getGrandTotal } = useBudget();
-  const grandTotal = getGrandTotal();
+  const { getPercentageOfIncome, getTotalIncome, getUnbudgetedAmount } =
+    useBudget();
+  const totalIncome = getTotalIncome();
+  const unbudgeted = getUnbudgetedAmount();
 
-  if (grandTotal === 0) return null;
+  if (totalIncome === 0) return null;
 
-  const categories: CategoryName[] = ["needs", "wants", "savings"];
+  const categories: SpendingCategoryName[] = ["needs", "wants", "savings"];
 
   return (
     <motion.div
@@ -24,12 +31,12 @@ function BudgetComparison() {
       className="bg-card border border-border rounded-xl p-4 mt-6"
     >
       <h3 className="text-sm font-semibold mb-4 text-muted-foreground uppercase tracking-wide">
-        50 / 30 / 20 Comparison
+        50 / 30 / 20 Comparison (of Income)
       </h3>
       <div className="space-y-4">
         {categories.map((category, index) => {
           const config = CATEGORY_CONFIG[category];
-          const actual = getPercentageByCategory(category);
+          const actual = getPercentageOfIncome(category);
           const target = config.targetPercentage;
           const diff = actual - target;
 
@@ -47,10 +54,10 @@ function BudgetComparison() {
                 </span>
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground">
-                    Target: {target}%
+                    Target: {target}% of income
                   </span>
                   <span className="font-semibold">
-                    Actual: {actual.toFixed(1)}%
+                    Actual: {actual.toFixed(1)}% of income
                   </span>
                   <motion.span
                     initial={{ scale: 0.8, opacity: 0 }}
@@ -90,6 +97,58 @@ function BudgetComparison() {
             </motion.div>
           );
         })}
+        {/* Unbudgeted Income Indicator */}
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.3, delay: 0.6 }}
+          className="pt-4 border-t border-border"
+        >
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-medium text-muted-foreground">
+              Unbudgeted Income
+            </span>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold">
+                {formatCurrency(unbudgeted)} (
+                {totalIncome > 0
+                  ? ((unbudgeted / totalIncome) * 100).toFixed(1)
+                  : 0}
+                %)
+              </span>
+            </div>
+          </div>
+          <div className="relative h-3 bg-muted rounded-full overflow-hidden mt-2">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{
+                width: `${Math.min((unbudgeted / totalIncome) * 100, 100)}%`,
+              }}
+              transition={{
+                duration: 0.8,
+                delay: 0.7,
+                ease: "easeOut",
+              }}
+              className={`absolute left-0 h-full rounded-full ${
+                unbudgeted < 0
+                  ? "bg-destructive"
+                  : unbudgeted === 0
+                  ? "bg-muted-foreground"
+                  : "bg-slate-400"
+              }`}
+            />
+          </div>
+          {unbudgeted < 0 && (
+            <p className="text-xs text-destructive mt-1">
+              You&apos;re over budget by {formatCurrency(Math.abs(unbudgeted))}
+            </p>
+          )}
+          {unbudgeted > 0 && (
+            <p className="text-xs text-muted-foreground mt-1">
+              {formatCurrency(unbudgeted)} still available to budget
+            </p>
+          )}
+        </motion.div>
       </div>
     </motion.div>
   );
@@ -105,10 +164,8 @@ function ChartSection() {
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ duration: 0.3 }}
-      className="space-y-4"
     >
       {state.selectedCategory ? <CategoryBreakdown /> : <BudgetPieChart />}
-      <BudgetComparison />
     </motion.div>
   );
 }
@@ -232,26 +289,33 @@ function BudgetDashboard() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.3 }}
-          className="grid grid-cols-1 lg:grid-cols-3 gap-6"
+          className="space-y-6"
         >
-          {/* Budget Columns */}
+          {/* First Row: Pie Chart and Comparison Side by Side */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.5, delay: 0.4 }}
+            >
+              <ChartSection />
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.5, delay: 0.5 }}
+            >
+              <BudgetComparison />
+            </motion.div>
+          </div>
+
+          {/* Second Row: Income, Needs, Wants, Savings */}
           <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5, delay: 0.4 }}
-            className="lg:col-span-2"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.6 }}
           >
             <BudgetColumns />
-          </motion.div>
-
-          {/* Chart Section */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5, delay: 0.5 }}
-            className="lg:col-span-1"
-          >
-            <ChartSection />
           </motion.div>
         </motion.div>
       </div>

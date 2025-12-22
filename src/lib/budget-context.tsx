@@ -15,6 +15,7 @@ import {
   BudgetItem,
   BudgetState,
   CategoryName,
+  SpendingCategoryName,
   CATEGORY_CONFIG,
 } from "@/types/budget";
 
@@ -34,7 +35,10 @@ type BudgetAction =
   | { type: "ADD_ITEM"; category: CategoryName; item: BudgetItem }
   | { type: "REMOVE_ITEM"; category: CategoryName; itemId: string }
   | { type: "UPDATE_ITEM"; category: CategoryName; item: BudgetItem }
-  | { type: "SET_SELECTED_CATEGORY"; category: CategoryName | null }
+  | {
+      type: "SET_SELECTED_CATEGORY";
+      category: CategoryName | "unbudgeted" | null;
+    }
   | { type: "CLEAR_ALL" }
   | { type: "LOAD_FROM_STORAGE"; state: BudgetState };
 
@@ -57,6 +61,12 @@ const initialState: BudgetState = {
       targetPercentage: CATEGORY_CONFIG.savings.targetPercentage,
       items: [],
       color: CATEGORY_CONFIG.savings.color,
+    },
+    income: {
+      name: "income",
+      targetPercentage: CATEGORY_CONFIG.income.targetPercentage,
+      items: [],
+      color: CATEGORY_CONFIG.income.color,
     },
   },
   selectedCategory: null,
@@ -82,6 +92,10 @@ function loadFromStorage(): BudgetState | null {
             ...initialState.categories.savings,
             items: parsed.categories?.savings?.items || [],
           },
+          income: {
+            ...initialState.categories.income,
+            items: parsed.categories?.income?.items || [],
+          },
         },
         selectedCategory: null,
       };
@@ -99,6 +113,7 @@ function saveToStorage(state: BudgetState): void {
         needs: { items: state.categories.needs.items },
         wants: { items: state.categories.wants.items },
         savings: { items: state.categories.savings.items },
+        income: { items: state.categories.income.items },
       },
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
@@ -166,10 +181,13 @@ interface BudgetContextType {
   addItem: (category: CategoryName, label: string, amount: number) => void;
   removeItem: (category: CategoryName, itemId: string) => void;
   updateItem: (category: CategoryName, item: BudgetItem) => void;
-  setSelectedCategory: (category: CategoryName | null) => void;
+  setSelectedCategory: (category: CategoryName | "unbudgeted" | null) => void;
   getTotalByCategory: (category: CategoryName) => number;
+  getTotalIncome: () => number;
+  getUnbudgetedAmount: () => number;
   getGrandTotal: () => number;
   getPercentageByCategory: (category: CategoryName) => number;
+  getPercentageOfIncome: (category: SpendingCategoryName) => number;
   clearAllData: () => void;
 }
 
@@ -218,9 +236,12 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "UPDATE_ITEM", category, item });
   }, []);
 
-  const setSelectedCategory = useCallback((category: CategoryName | null) => {
-    dispatch({ type: "SET_SELECTED_CATEGORY", category });
-  }, []);
+  const setSelectedCategory = useCallback(
+    (category: CategoryName | "unbudgeted" | null) => {
+      dispatch({ type: "SET_SELECTED_CATEGORY", category });
+    },
+    []
+  );
 
   const getTotalByCategory = useCallback(
     (category: CategoryName): number => {
@@ -232,24 +253,57 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
     [state.categories]
   );
 
-  const grandTotal = useMemo(() => {
-    return Object.values(state.categories).reduce(
-      (sum, category) =>
-        sum + category.items.reduce((catSum, item) => catSum + item.amount, 0),
+  // Total income from all sources
+  const totalIncome = useMemo(() => {
+    return state.categories.income.items.reduce(
+      (sum, item) => sum + item.amount,
       0
+    );
+  }, [state.categories.income.items]);
+
+  // Total spending (needs + wants + savings, excluding income)
+  const totalSpending = useMemo(() => {
+    return (
+      state.categories.needs.items.reduce((sum, item) => sum + item.amount, 0) +
+      state.categories.wants.items.reduce((sum, item) => sum + item.amount, 0) +
+      state.categories.savings.items.reduce((sum, item) => sum + item.amount, 0)
     );
   }, [state.categories]);
 
-  const getGrandTotal = useCallback((): number => {
-    return grandTotal;
-  }, [grandTotal]);
+  // Unbudgeted amount (income - spending)
+  const unbudgetedAmount = useMemo(() => {
+    return totalIncome - totalSpending;
+  }, [totalIncome, totalSpending]);
 
+  const getTotalIncome = useCallback((): number => {
+    return totalIncome;
+  }, [totalIncome]);
+
+  const getUnbudgetedAmount = useCallback((): number => {
+    return unbudgetedAmount;
+  }, [unbudgetedAmount]);
+
+  // Legacy function - now returns total spending (for backward compatibility)
+  const getGrandTotal = useCallback((): number => {
+    return totalSpending;
+  }, [totalSpending]);
+
+  // Get percentage of income (for spending categories)
+  const getPercentageOfIncome = useCallback(
+    (category: SpendingCategoryName): number => {
+      if (totalIncome === 0) return 0;
+      return (getTotalByCategory(category) / totalIncome) * 100;
+    },
+    [totalIncome, getTotalByCategory]
+  );
+
+  // Legacy function - kept for compatibility but calculates as % of spending
   const getPercentageByCategory = useCallback(
     (category: CategoryName): number => {
-      if (grandTotal === 0) return 0;
-      return (getTotalByCategory(category) / grandTotal) * 100;
+      if (totalSpending === 0) return 0;
+      return (getTotalByCategory(category) / totalSpending) * 100;
     },
-    [grandTotal, getTotalByCategory]
+    [totalSpending, getTotalByCategory]
   );
 
   const clearAllData = useCallback(() => {
@@ -267,8 +321,11 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
         updateItem,
         setSelectedCategory,
         getTotalByCategory,
+        getTotalIncome,
+        getUnbudgetedAmount,
         getGrandTotal,
         getPercentageByCategory,
+        getPercentageOfIncome,
         clearAllData,
       }}
     >

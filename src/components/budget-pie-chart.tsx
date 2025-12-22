@@ -11,7 +11,11 @@ import {
   Legend,
 } from "recharts";
 import { useBudget } from "@/lib/budget-context";
-import { CategoryName, CATEGORY_CONFIG } from "@/types/budget";
+import {
+  CategoryName,
+  SpendingCategoryName,
+  CATEGORY_CONFIG,
+} from "@/types/budget";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 
@@ -19,37 +23,70 @@ interface ChartData {
   name: string;
   value: number;
   color: string;
-  category: CategoryName;
+  category: CategoryName | "unbudgeted";
   percentage: number;
-  [key: string]: string | number;
+  isUnbudgeted?: boolean;
+  [key: string]: string | number | boolean | undefined;
 }
 
-export function BudgetPieChart() {
-  const { getTotalByCategory, getGrandTotal, setSelectedCategory } =
-    useBudget();
+const UNBUDGETED_COLOR = "#94a3b8";
 
-  const grandTotal = getGrandTotal();
+export function BudgetPieChart() {
+  const {
+    getTotalByCategory,
+    getTotalIncome,
+    getUnbudgetedAmount,
+    setSelectedCategory,
+  } = useBudget();
+
+  const totalIncome = getTotalIncome();
+  const unbudgeted = getUnbudgetedAmount();
 
   const chartData: ChartData[] = useMemo(() => {
-    return (["needs", "wants", "savings"] as CategoryName[])
-      .map((category) => {
+    const segments: ChartData[] = [];
+
+    // Add spending categories (Needs, Wants, Savings)
+    (["needs", "wants", "savings"] as SpendingCategoryName[]).forEach(
+      (category) => {
         const total = getTotalByCategory(category);
-        return {
-          name: CATEGORY_CONFIG[category].label,
-          value: total,
-          color: CATEGORY_CONFIG[category].color,
-          category,
-          percentage: grandTotal > 0 ? (total / grandTotal) * 100 : 0,
-        };
-      })
-      .filter((item) => item.value > 0);
-  }, [getTotalByCategory, grandTotal]);
+        if (total > 0) {
+          segments.push({
+            name: CATEGORY_CONFIG[category].label,
+            value: total,
+            color: CATEGORY_CONFIG[category].color,
+            category,
+            percentage: totalIncome > 0 ? (total / totalIncome) * 100 : 0,
+            isUnbudgeted: false,
+          });
+        }
+      }
+    );
+
+    // Add unbudgeted income segment
+    if (unbudgeted > 0 || totalIncome === 0) {
+      segments.push({
+        name: "Unbudgeted Income",
+        value: Math.max(unbudgeted, 0),
+        color: UNBUDGETED_COLOR,
+        category: "income" as CategoryName,
+        percentage:
+          totalIncome > 0 ? (Math.max(unbudgeted, 0) / totalIncome) * 100 : 100,
+        isUnbudgeted: true,
+      });
+    }
+
+    return segments;
+  }, [getTotalByCategory, totalIncome, unbudgeted]);
 
   const handleClick = (data: ChartData) => {
-    setSelectedCategory(data.category);
+    if (data.isUnbudgeted) {
+      setSelectedCategory("unbudgeted");
+    } else {
+      setSelectedCategory(data.category as CategoryName);
+    }
   };
 
-  if (grandTotal === 0) {
+  if (totalIncome === 0) {
     return (
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
@@ -67,7 +104,7 @@ export function BudgetPieChart() {
               transition={{ delay: 0.2 }}
               className="text-muted-foreground text-center"
             >
-              Add items to see your budget breakdown
+              Add income to see your budget breakdown
             </motion.p>
           </CardContent>
         </Card>
@@ -84,14 +121,40 @@ export function BudgetPieChart() {
       <Card className="h-full">
         <CardHeader>
           <CardTitle className="text-lg">Budget Breakdown</CardTitle>
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
-            className="text-sm text-muted-foreground"
-          >
-            Total: {formatCurrency(grandTotal)}
-          </motion.p>
+          <div className="space-y-1">
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.2 }}
+              className="text-sm text-muted-foreground"
+            >
+              Income: {formatCurrency(totalIncome)}
+            </motion.p>
+            {unbudgeted >= 0 && (
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.25 }}
+                className="text-xs text-muted-foreground"
+              >
+                Unbudgeted: {formatCurrency(unbudgeted)} (
+                {totalIncome > 0
+                  ? ((unbudgeted / totalIncome) * 100).toFixed(1)
+                  : 0}
+                %)
+              </motion.p>
+            )}
+            {unbudgeted < 0 && (
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.25 }}
+                className="text-xs text-destructive font-medium"
+              >
+                Over budget by: {formatCurrency(Math.abs(unbudgeted))}
+              </motion.p>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <motion.div
@@ -139,12 +202,22 @@ export function BudgetPieChart() {
                           </p>
                           <p className="text-sm text-muted-foreground">
                             {formatCurrency(data.value)} (
-                            {data.percentage.toFixed(1)}%)
+                            {data.percentage.toFixed(1)}% of income)
                           </p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Target:{" "}
-                            {CATEGORY_CONFIG[data.category].targetPercentage}%
-                          </p>
+                          {data.isUnbudgeted ? (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Available to budget
+                            </p>
+                          ) : (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Target:{" "}
+                              {
+                                CATEGORY_CONFIG[data.category as CategoryName]
+                                  .targetPercentage
+                              }
+                              % of income
+                            </p>
+                          )}
                         </div>
                       );
                     }
