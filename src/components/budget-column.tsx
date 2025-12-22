@@ -4,7 +4,11 @@ import { memo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CategoryName, CATEGORY_CONFIG } from "@/types/budget";
+import {
+  CategoryName,
+  SpendingCategoryName,
+  CATEGORY_CONFIG,
+} from "@/types/budget";
 import { useBudget } from "@/lib/budget-context";
 import { formatCurrency } from "@/lib/utils";
 import { BudgetInput } from "./budget-input";
@@ -23,14 +27,18 @@ export const BudgetColumn = memo(function BudgetColumn({
     removeItem,
     getTotalByCategory,
     getPercentageByCategory,
+    getPercentageOfIncome,
     getTargetPercentage,
   } = useBudget();
 
   const config = CATEGORY_CONFIG[category];
   const items = state.categories[category].items;
   const total = getTotalByCategory(category);
-  const percentage = getPercentageByCategory(category);
   const isIncome = category === "income";
+  // Use percentage of income for spending categories, percentage of spending for income category
+  const percentage = isIncome
+    ? getPercentageByCategory(category)
+    : getPercentageOfIncome(category as SpendingCategoryName);
   const target = !isIncome ? getTargetPercentage(category) : 0;
 
   return (
