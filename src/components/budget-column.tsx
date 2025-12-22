@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CategoryName, CATEGORY_CONFIG } from "@/types/budget";
@@ -16,6 +17,7 @@ export const BudgetColumn = memo(function BudgetColumn({
   category,
 }: BudgetColumnProps) {
   const [isAdding, setIsAdding] = useState(false);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const { state, removeItem, getTotalByCategory, getPercentageByCategory } =
     useBudget();
 
@@ -63,51 +65,124 @@ export const BudgetColumn = memo(function BudgetColumn({
       </CardHeader>
       <CardContent className="flex-1 flex flex-col">
         <div className="flex-1 space-y-2 mb-4 overflow-y-auto max-h-64">
-          {items.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              No items yet
-            </p>
-          ) : (
-            items.map((item) => (
-              <div
-                key={item.id}
-                className="flex items-center justify-between p-2 bg-muted/30 rounded-md group hover:bg-muted/50 transition-colors"
+          <AnimatePresence mode="popLayout">
+            {items.length === 0 ? (
+              <motion.p
+                key="empty"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="text-sm text-muted-foreground text-center py-4"
               >
-                <span className="text-sm font-medium truncate flex-1 mr-2">
-                  {item.label}
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">
-                    {formatCurrency(item.amount)}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => removeItem(category, item.id)}
-                    className="opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive/80 transition-opacity text-lg leading-none px-1"
-                    aria-label={`Remove ${item.label}`}
+                No items yet
+              </motion.p>
+            ) : (
+              items.map((item, index) => {
+                const isEditing = editingItemId === item.id;
+
+                if (isEditing) {
+                  return (
+                    <motion.div
+                      key={`edit-${item.id}`}
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ duration: 0.2 }}
+                      layout
+                    >
+                      <BudgetInput
+                        category={category}
+                        item={item}
+                        onClose={() => setEditingItemId(null)}
+                      />
+                    </motion.div>
+                  );
+                }
+
+                return (
+                  <motion.div
+                    key={item.id}
+                    initial={{ opacity: 0, x: -10, scale: 0.95 }}
+                    animate={{ opacity: 1, x: 0, scale: 1 }}
+                    exit={{ opacity: 0, x: 10, scale: 0.95 }}
+                    transition={{
+                      duration: 0.2,
+                      delay: Math.min(index * 0.05, 0.2),
+                    }}
+                    layout
+                    className="flex items-center justify-between p-2 bg-muted/30 rounded-md group hover:bg-muted/50 transition-colors cursor-pointer"
+                    onClick={(e) => {
+                      // Don't trigger edit if clicking the remove button
+                      if (
+                        (e.target as HTMLElement).closest(
+                          'button[aria-label*="Remove"]'
+                        )
+                      ) {
+                        return;
+                      }
+                      setEditingItemId(item.id);
+                    }}
                   >
-                    ×
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
+                    <span className="text-sm font-medium truncate flex-1 mr-2">
+                      {item.label}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">
+                        {formatCurrency(item.amount)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeItem(category, item.id);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive/80 transition-opacity text-lg leading-none px-1"
+                        aria-label={`Remove ${item.label}`}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </motion.div>
+                );
+              })
+            )}
+          </AnimatePresence>
         </div>
 
-        {isAdding ? (
-          <BudgetInput category={category} onClose={() => setIsAdding(false)} />
-        ) : (
-          <Button
-            variant="outline"
-            className="w-full mt-auto"
-            onClick={() => setIsAdding(true)}
-            style={{ borderColor: config.color, color: config.color }}
-          >
-            + Add Item
-          </Button>
-        )}
+        <AnimatePresence mode="wait">
+          {isAdding || editingItemId ? null : (
+            <motion.div
+              key="button"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <Button
+                variant="outline"
+                className="w-full mt-auto"
+                onClick={() => setIsAdding(true)}
+                style={{ borderColor: config.color, color: config.color }}
+              >
+                + Add Item
+              </Button>
+            </motion.div>
+          )}
+          {isAdding && !editingItemId && (
+            <motion.div
+              key="input"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <BudgetInput
+                category={category}
+                onClose={() => setIsAdding(false)}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </CardContent>
     </Card>
   );
 });
-

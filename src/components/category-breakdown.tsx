@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   PieChart,
   Pie,
@@ -51,14 +52,13 @@ export function CategoryBreakdown() {
   const { state, setSelectedCategory, getTotalByCategory } = useBudget();
 
   const selectedCategory = state.selectedCategory;
-
-  if (!selectedCategory) {
-    return null;
-  }
-
-  const config = CATEGORY_CONFIG[selectedCategory];
-  const items = state.categories[selectedCategory].items;
-  const categoryTotal = getTotalByCategory(selectedCategory);
+  const config = selectedCategory ? CATEGORY_CONFIG[selectedCategory] : null;
+  const items = selectedCategory
+    ? state.categories[selectedCategory].items
+    : [];
+  const categoryTotal = selectedCategory
+    ? getTotalByCategory(selectedCategory)
+    : 0;
 
   const chartData: ItemChartData[] = useMemo(
     () =>
@@ -71,117 +71,181 @@ export function CategoryBreakdown() {
   );
 
   const colors = useMemo(
-    () => generateShades(config.color, items.length),
-    [config.color, items.length]
+    () => (config ? generateShades(config.color, items.length) : []),
+    [config, items.length]
   );
 
+  if (!selectedCategory || !config) {
+    return null;
+  }
+
   return (
-    <Card
-      className="h-full"
-      style={{ borderTopColor: config.color, borderTopWidth: "3px" }}
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={{ duration: 0.3 }}
     >
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">{config.label} Breakdown</CardTitle>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setSelectedCategory(null)}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            ← Back
-          </Button>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Total: {formatCurrency(categoryTotal)}
-        </p>
-      </CardHeader>
-      <CardContent>
-        {items.length === 0 ? (
-          <div className="flex items-center justify-center h-64">
-            <p className="text-muted-foreground text-center">
-              No items in this category
-            </p>
+      <Card
+        className="h-full"
+        style={{ borderTopColor: config.color, borderTopWidth: "3px" }}
+      >
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <motion.div
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.1 }}
+            >
+              <CardTitle className="text-lg">
+                {config.label} Breakdown
+              </CardTitle>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, x: 10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.15 }}
+            >
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedCategory(null)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                ← Back
+              </Button>
+            </motion.div>
           </div>
-        ) : (
-          <>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={chartData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={80}
-                    paddingAngle={2}
-                    dataKey="value"
-                  >
-                    {chartData.map((_, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={colors[index]}
-                        stroke={config.color}
-                        strokeWidth={1}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    content={({ active, payload }) => {
-                      if (active && payload && payload.length) {
-                        const data = payload[0].payload as ItemChartData;
-                        return (
-                          <div className="bg-popover border border-border rounded-lg shadow-lg p-3">
-                            <p className="font-medium">{data.name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {formatCurrency(data.value)} (
-                              {data.percentage.toFixed(1)}%)
-                            </p>
-                          </div>
-                        );
-                      }
-                      return null;
-                    }}
-                  />
-                  <Legend
-                    layout="vertical"
-                    align="right"
-                    verticalAlign="middle"
-                    formatter={(value, _entry, index) => {
-                      const data = chartData[index];
-                      return (
-                        <span className="text-xs">
-                          {value} ({data?.percentage.toFixed(0)}%)
-                        </span>
-                      );
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="mt-4 space-y-2">
-              {items.map((item, index) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between text-sm p-2 rounded"
-                  style={{ backgroundColor: `${colors[index]}20` }}
-                >
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: colors[index] }}
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            className="text-sm text-muted-foreground"
+          >
+            Total: {formatCurrency(categoryTotal)}
+          </motion.p>
+        </CardHeader>
+        <CardContent>
+          {items.length === 0 ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className="flex items-center justify-center h-64"
+            >
+              <p className="text-muted-foreground text-center">
+                No items in this category
+              </p>
+            </motion.div>
+          ) : (
+            <>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.4, delay: 0.3 }}
+                className="h-64"
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={chartData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={80}
+                      paddingAngle={2}
+                      dataKey="value"
+                      animationBegin={0}
+                      animationDuration={800}
+                      animationEasing="ease-out"
+                    >
+                      {chartData.map((_, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={colors[index]}
+                          stroke={config.color}
+                          strokeWidth={1}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload as ItemChartData;
+                          return (
+                            <div className="bg-popover border border-border rounded-lg shadow-lg p-3">
+                              <p className="font-medium">{data.name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {formatCurrency(data.value)} (
+                                {data.percentage.toFixed(1)}%)
+                              </p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
                     />
-                    <span>{item.label}</span>
-                  </div>
-                  <span className="font-medium">
-                    {formatCurrency(item.amount)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-      </CardContent>
-    </Card>
+                    <Legend
+                      layout="vertical"
+                      align="right"
+                      verticalAlign="middle"
+                      formatter={(value, _entry, index) => {
+                        const data = chartData[index];
+                        return (
+                          <span className="text-xs">
+                            {value} ({data?.percentage.toFixed(0)}%)
+                          </span>
+                        );
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.5 }}
+                className="mt-4 space-y-2"
+              >
+                <AnimatePresence>
+                  {items.map((item, index) => (
+                    <motion.div
+                      key={item.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      transition={{
+                        duration: 0.2,
+                        delay: index * 0.05,
+                      }}
+                      layout
+                      className="flex items-center justify-between text-sm p-2 rounded"
+                      style={{ backgroundColor: `${colors[index]}20` }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <motion.div
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          transition={{
+                            delay: 0.6 + index * 0.05,
+                            type: "spring",
+                          }}
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: colors[index] }}
+                        />
+                        <span>{item.label}</span>
+                      </div>
+                      <span className="font-medium">
+                        {formatCurrency(item.amount)}
+                      </span>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </motion.div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </motion.div>
   );
 }
