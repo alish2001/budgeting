@@ -54,14 +54,14 @@ export const BudgetInput = memo(function BudgetInput({
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
-      transition={{ duration: 0.2 }}
+      transition={{ duration: 0.12 }}
       onSubmit={handleSubmit}
       className="space-y-3 p-3 bg-muted/50 rounded-lg"
     >
       <motion.div
         initial={{ opacity: 0, x: -10 }}
         animate={{ opacity: 1, x: 0 }}
-        transition={{ delay: 0.1 }}
+        transition={{ delay: 0.05 }}
         className="space-y-1.5"
       >
         <Label htmlFor={`label-${category}-${item?.id || "new"}`} className="text-xs font-medium">
@@ -80,7 +80,7 @@ export const BudgetInput = memo(function BudgetInput({
       <motion.div
         initial={{ opacity: 0, x: -10 }}
         animate={{ opacity: 1, x: 0 }}
-        transition={{ delay: 0.15 }}
+        transition={{ delay: 0.08 }}
         className="space-y-1.5"
       >
         <Label htmlFor={`amount-${category}-${item?.id || "new"}`} className="text-xs font-medium">
@@ -100,7 +100,7 @@ export const BudgetInput = memo(function BudgetInput({
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
+        transition={{ delay: 0.1 }}
         className="flex gap-2"
       >
         <Button type="submit" size="sm" className="flex-1 h-8 text-xs">

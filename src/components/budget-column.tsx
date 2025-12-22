@@ -90,7 +90,7 @@ export const BudgetColumn = memo(function BudgetColumn({
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.95 }}
-                      transition={{ duration: 0.2 }}
+                      transition={{ duration: 0.12 }}
                       layout
                     >
                       <BudgetInput
@@ -109,8 +109,8 @@ export const BudgetColumn = memo(function BudgetColumn({
                     animate={{ opacity: 1, x: 0, scale: 1 }}
                     exit={{ opacity: 0, x: 10, scale: 0.95 }}
                     transition={{
-                      duration: 0.2,
-                      delay: Math.min(index * 0.05, 0.2),
+                      duration: 0.12,
+                      delay: Math.min(index * 0.02, 0.1),
                     }}
                     layout
                     className="flex items-center justify-between p-2 bg-muted/30 rounded-md group hover:bg-muted/50 transition-colors cursor-pointer"
@@ -159,6 +159,7 @@ export const BudgetColumn = memo(function BudgetColumn({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
+              transition={{ duration: 0.06 }}
             >
               <Button
                 variant="outline"
@@ -176,7 +177,7 @@ export const BudgetColumn = memo(function BudgetColumn({
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.2 }}
+              transition={{ duration: 0.1, delay: 0.02 }}
             >
               <BudgetInput
                 category={category}

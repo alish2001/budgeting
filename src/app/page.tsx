@@ -28,7 +28,7 @@ function BudgetComparison() {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: 0.2 }}
+      transition={{ duration: 0.2, delay: 0.1 }}
       className="bg-card border border-border rounded-xl p-4 mt-6"
     >
       <h3 className="text-sm font-semibold mb-4 text-muted-foreground uppercase tracking-wide">
@@ -46,7 +46,7 @@ function BudgetComparison() {
               key={category}
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.3, delay: 0.3 + index * 0.1 }}
+              transition={{ duration: 0.15, delay: 0.12 + index * 0.05 }}
               className="space-y-1.5"
             >
               <div className="flex items-center justify-between text-sm">
@@ -63,7 +63,7 @@ function BudgetComparison() {
                   <motion.span
                     initial={{ scale: 0.8, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
-                    transition={{ delay: 0.4 + index * 0.1 }}
+                    transition={{ delay: 0.15 + index * 0.05 }}
                     className={`text-xs font-medium px-1.5 py-0.5 rounded ${
                       Math.abs(diff) <= 5
                         ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
@@ -82,8 +82,8 @@ function BudgetComparison() {
                   initial={{ width: 0 }}
                   animate={{ width: `${Math.min(actual, 100)}%` }}
                   transition={{
-                    duration: 0.8,
-                    delay: 0.5 + index * 0.1,
+                    duration: 0.5,
+                    delay: 0.2 + index * 0.05,
                     ease: "easeOut",
                   }}
                   className="absolute left-0 h-full rounded-full"
@@ -102,7 +102,7 @@ function BudgetComparison() {
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.3, delay: 0.6 }}
+          transition={{ duration: 0.15, delay: 0.25 }}
           className="pt-4 border-t border-border"
         >
           <div className="flex items-center justify-between text-sm">
@@ -126,8 +126,8 @@ function BudgetComparison() {
                 width: `${Math.min((unbudgeted / totalIncome) * 100, 100)}%`,
               }}
               transition={{
-                duration: 0.8,
-                delay: 0.7,
+                duration: 0.5,
+                delay: 0.3,
                 ease: "easeOut",
               }}
               className={`absolute left-0 h-full rounded-full ${
@@ -164,7 +164,7 @@ function ChartSection() {
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      transition={{ duration: 0.3 }}
+      transition={{ duration: 0.15 }}
     >
       {state.selectedCategory ? <CategoryBreakdown /> : <BudgetPieChart />}
     </motion.div>

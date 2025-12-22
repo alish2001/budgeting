@@ -91,7 +91,7 @@ export function BudgetPieChart() {
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.3 }}
+        transition={{ duration: 0.15 }}
       >
         <Card className="h-full">
           <CardHeader>
@@ -101,7 +101,7 @@ export function BudgetPieChart() {
             <motion.p
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 0.2 }}
+              transition={{ delay: 0.1 }}
               className="text-muted-foreground text-center"
             >
               Add income to see your budget breakdown
@@ -116,7 +116,7 @@ export function BudgetPieChart() {
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.4 }}
+      transition={{ duration: 0.15 }}
     >
       <Card className="h-full">
         <CardHeader>
@@ -125,7 +125,7 @@ export function BudgetPieChart() {
             <motion.p
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 0.2 }}
+              transition={{ delay: 0.08 }}
               className="text-sm text-muted-foreground"
             >
               Income: {formatCurrency(totalIncome)}
@@ -134,7 +134,7 @@ export function BudgetPieChart() {
               <motion.p
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ delay: 0.25 }}
+                transition={{ delay: 0.1 }}
                 className="text-xs text-muted-foreground"
               >
                 Unbudgeted: {formatCurrency(unbudgeted)} (
@@ -148,7 +148,7 @@ export function BudgetPieChart() {
               <motion.p
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ delay: 0.25 }}
+                transition={{ delay: 0.1 }}
                 className="text-xs text-destructive font-medium"
               >
                 Over budget by: {formatCurrency(Math.abs(unbudgeted))}
@@ -160,7 +160,7 @@ export function BudgetPieChart() {
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
+            transition={{ duration: 0.2, delay: 0.1 }}
             className="h-72"
           >
             <ResponsiveContainer width="100%" height="100%">

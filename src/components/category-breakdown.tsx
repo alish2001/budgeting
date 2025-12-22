@@ -105,7 +105,7 @@ export function CategoryBreakdown() {
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      transition={{ duration: 0.3 }}
+      transition={{ duration: 0.15 }}
     >
       <Card
         className="h-full"
@@ -116,7 +116,7 @@ export function CategoryBreakdown() {
             <motion.div
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.1 }}
+              transition={{ delay: 0.05 }}
             >
               <CardTitle className="text-lg">
                 {isUnbudgeted ? "Income Sources" : `${config.label} Breakdown`}
@@ -125,7 +125,7 @@ export function CategoryBreakdown() {
             <motion.div
               initial={{ opacity: 0, x: 10 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.15 }}
+              transition={{ delay: 0.08 }}
             >
               <Button
                 variant="ghost"
@@ -241,7 +241,7 @@ export function CategoryBreakdown() {
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ delay: 0.5 }}
+                transition={{ delay: 0.1 }}
                 className="mt-4 space-y-2"
               >
                 <AnimatePresence>
@@ -252,8 +252,8 @@ export function CategoryBreakdown() {
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: 20 }}
                       transition={{
-                        duration: 0.2,
-                        delay: index * 0.05,
+                        duration: 0.12,
+                        delay: index * 0.02,
                       }}
                       layout
                       className="flex items-center justify-between text-sm p-2 rounded"
@@ -264,8 +264,10 @@ export function CategoryBreakdown() {
                           initial={{ scale: 0 }}
                           animate={{ scale: 1 }}
                           transition={{
-                            delay: 0.6 + index * 0.05,
+                            delay: 0.15 + index * 0.02,
                             type: "spring",
+                            stiffness: 300,
+                            damping: 20,
                           }}
                           className="w-3 h-3 rounded-full"
                           style={{ backgroundColor: colors[index] }}

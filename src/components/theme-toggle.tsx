@@ -49,7 +49,7 @@ export function ThemeToggle() {
     <motion.div
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.3 }}
+      transition={{ duration: 0.15 }}
     >
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -63,7 +63,7 @@ export function ThemeToggle() {
               key={theme}
               initial={{ rotate: -180, opacity: 0 }}
               animate={{ rotate: 0, opacity: 1 }}
-              transition={{ duration: 0.3 }}
+              transition={{ duration: 0.15 }}
             >
               {getIcon()}
             </motion.div>
