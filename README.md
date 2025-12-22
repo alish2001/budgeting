@@ -1,4 +1,4 @@
-# Budget Planner
+# Oversight - Budget Planner
 
 A modern budgeting web application that helps you track expenses using the **50/30/20 rule** (50% Needs, 30% Wants, 20% Savings).
 

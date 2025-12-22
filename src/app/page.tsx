@@ -228,7 +228,7 @@ function BudgetDashboard() {
             className="flex items-center justify-center gap-4 mb-2"
           >
             <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-900 via-slate-700 to-slate-900 dark:from-white dark:via-slate-300 dark:to-white bg-clip-text text-transparent">
-              Budget Planner
+              Oversight - Budget Planner
             </h1>
           </motion.div>
           <motion.p

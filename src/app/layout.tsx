@@ -28,11 +28,31 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Budget Planner - 50/30/20 Rule",
+  metadataBase: new URL("https://oversight.finance"),
+  title: "Oversight - Budget Planner - 50/30/20 Rule",
   description:
     "A simple budgeting app using the 50/30/20 rule to manage your finances",
   keywords: ["budget", "finance", "50/30/20", "money management", "savings"],
   authors: [{ name: "Ali Shariatmadari" }],
+  applicationName: "Oversight - Budget Planner",
+  openGraph: {
+    title: "Oversight - Budget Planner - 50/30/20 Rule",
+    description:
+      "A simple budgeting app using the 50/30/20 rule to manage your finances",
+    url: "https://oversight.finance",
+    siteName: "Oversight - Budget Planner",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Oversight - Budget Planner - 50/30/20 Rule",
+    description:
+      "A simple budgeting app using the 50/30/20 rule to manage your finances",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default function RootLayout({

@@ -1,10 +1,10 @@
-# AGENTS.md - Budget Planner Project Guide
+# AGENTS.md - Oversight - Budget Planner Project Guide
 
-This document provides comprehensive information for AI agents, developers, and contributors working on the Budget Planner application.
+This document provides comprehensive information for AI agents, developers, and contributors working on the Oversight - Budget Planner application.
 
 ## 📋 Project Overview
 
-**Budget Planner** is a modern, interactive web application that helps users manage their finances using the **50/30/20 budgeting rule**:
+**Oversight - Budget Planner** is a modern, interactive web application that helps users manage their finances using the **50/30/20 budgeting rule**:
 
 - **50%** of income for Needs (essential expenses)
 - **30%** of income for Wants (discretionary spending)
