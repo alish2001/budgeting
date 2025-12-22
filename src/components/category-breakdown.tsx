@@ -16,29 +16,38 @@ interface ItemChartData {
   [key: string]: string | number;
 }
 
+// Distinct color palette for category breakdowns
+// These colors are chosen to be visually distinct and work well together
+const BREAKDOWN_COLORS = [
+  "#ef4444", // Red
+  "#3b82f6", // Blue
+  "#22c55e", // Green
+  "#f59e0b", // Amber
+  "#8b5cf6", // Purple
+  "#ec4899", // Pink
+  "#06b6d4", // Cyan
+  "#84cc16", // Lime
+  "#f97316", // Orange
+  "#6366f1", // Indigo
+  "#14b8a6", // Teal
+  "#a855f7", // Violet
+  "#eab308", // Yellow
+  "#10b981", // Emerald
+  "#f43f5e", // Rose
+];
+
 // Generate distinct colors for items within a category
-function generateShades(baseColor: string, count: number): string[] {
+// Uses a diverse color palette instead of shades of the same color
+function generateDistinctColors(count: number): string[] {
   if (count === 0) return [];
 
-  const hex = baseColor.replace("#", "");
-  const r = parseInt(hex.substring(0, 2), 16);
-  const g = parseInt(hex.substring(2, 4), 16);
-  const b = parseInt(hex.substring(4, 6), 16);
-
-  const shades: string[] = [];
+  const colors: string[] = [];
   for (let i = 0; i < count; i++) {
-    const factor = 0.4 + (0.6 * i) / Math.max(count - 1, 1);
-    const newR = Math.round(r * factor + 255 * (1 - factor) * 0.3);
-    const newG = Math.round(g * factor + 255 * (1 - factor) * 0.3);
-    const newB = Math.round(b * factor + 255 * (1 - factor) * 0.3);
-    shades.push(
-      `rgb(${Math.min(255, newR)}, ${Math.min(255, newG)}, ${Math.min(
-        255,
-        newB
-      )})`
-    );
+    // Cycle through the color palette, ensuring good distribution
+    const colorIndex = i % BREAKDOWN_COLORS.length;
+    colors.push(BREAKDOWN_COLORS[colorIndex]);
   }
-  return shades;
+  return colors;
 }
 
 export function CategoryBreakdown() {
@@ -85,8 +94,8 @@ export function CategoryBreakdown() {
   );
 
   const colors = useMemo(
-    () => (config ? generateShades(config.color, items.length) : []),
-    [config, items.length]
+    () => generateDistinctColors(items.length),
+    [items.length]
   );
 
   if (!selectedCategory || !config) {
