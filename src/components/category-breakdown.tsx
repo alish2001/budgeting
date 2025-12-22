@@ -2,14 +2,7 @@
 
 import { useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  PieChart,
-  Pie,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
-  Legend,
-} from "recharts";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { useBudget } from "@/lib/budget-context";
 import { CATEGORY_CONFIG } from "@/types/budget";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -220,19 +213,6 @@ export function CategoryBreakdown() {
                           );
                         }
                         return null;
-                      }}
-                    />
-                    <Legend
-                      layout="vertical"
-                      align="right"
-                      verticalAlign="middle"
-                      formatter={(value, _entry, index) => {
-                        const data = chartData[index];
-                        return (
-                          <span className="text-xs">
-                            {value} ({data?.percentage.toFixed(0)}%)
-                          </span>
-                        );
                       }}
                     />
                   </PieChart>
