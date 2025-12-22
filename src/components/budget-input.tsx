@@ -73,7 +73,7 @@ export const BudgetInput = memo(function BudgetInput({
           placeholder="e.g., Rent, Groceries..."
           value={label}
           onChange={(e) => setLabel(e.target.value)}
-          className="h-8 text-sm"
+          className="h-8 text-base"
           autoFocus
         />
       </motion.div>
@@ -92,7 +92,7 @@ export const BudgetInput = memo(function BudgetInput({
           placeholder="0.00"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
-          className="h-8 text-sm"
+          className="h-8 text-base"
           min="0"
           step="0.01"
         />
