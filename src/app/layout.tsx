@@ -30,25 +30,52 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://oversight.finance"),
-  title: "Oversight - Budget Planner - 50/30/20 Rule",
+  title: "Oversight - Budget Planner",
   description:
     "A simple budgeting app using the 50/30/20 rule to manage your finances",
-  keywords: ["budget", "finance", "50/30/20", "money management", "savings"],
+  keywords: [
+    "oversight",
+    "budget",
+    "finance",
+    "50/30/20",
+    "money management",
+    "savings",
+  ],
   authors: [{ name: "Ali Shariatmadari" }],
   applicationName: "Oversight - Budget Planner",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+    ],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
+  manifest: "/site.webmanifest",
   openGraph: {
-    title: "Oversight - Budget Planner - 50/30/20 Rule",
+    title: "Oversight - Budget Planner",
     description:
       "A simple budgeting app using the 50/30/20 rule to manage your finances",
     url: "https://oversight.finance",
     siteName: "Oversight - Budget Planner",
     type: "website",
+    images: [
+      {
+        url: "https://oversight.finance/oversight-og.png",
+        width: 1200,
+        height: 630,
+        alt: "Oversight - Budget Planner",
+      },
+    ],
   },
   twitter: {
-    card: "summary",
-    title: "Oversight - Budget Planner - 50/30/20 Rule",
+    card: "summary_large_image",
+    title: "Oversight - Budget Planner",
     description:
       "A simple budgeting app using the 50/30/20 rule to manage your finances",
+    images: ["https://oversight.finance/oversight-og.png"],
   },
   robots: {
     index: true,
@@ -62,7 +89,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en">
       <body
         className={`${spaceGrotesk.variable} ${jetbrainsMono.variable} font-sans antialiased`}
       >
