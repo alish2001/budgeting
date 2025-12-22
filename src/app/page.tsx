@@ -5,6 +5,7 @@ import { BudgetProvider, useBudget } from "@/lib/budget-context";
 import { BudgetColumns } from "@/components/budget-columns";
 import { BudgetPieChart } from "@/components/budget-pie-chart";
 import { CategoryBreakdown } from "@/components/category-breakdown";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   CATEGORY_CONFIG,
   CategoryName,
@@ -203,6 +204,16 @@ function BudgetDashboard() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
+        {/* Theme Toggle - Top Right */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.3, delay: 0.2 }}
+          className="flex justify-end mb-4"
+        >
+          <ThemeToggle />
+        </motion.div>
+
         {/* Header */}
         <motion.header
           initial={{ opacity: 0, y: -20 }}
