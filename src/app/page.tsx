@@ -29,12 +29,12 @@ function BudgetComparison() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, delay: 0.1 }}
-      className="bg-card border border-border rounded-xl p-4 mt-6"
+      className="bg-card border border-border rounded-xl p-4 sm:p-6 mt-6"
     >
-      <h3 className="text-sm font-semibold mb-4 text-muted-foreground uppercase tracking-wide">
+      <h3 className="text-sm sm:text-base font-semibold mb-4 sm:mb-6 text-muted-foreground uppercase tracking-wide">
         50 / 30 / 20 Comparison (of Income)
       </h3>
-      <div className="space-y-4">
+      <div className="space-y-5 sm:space-y-4">
         {categories.map((category, index) => {
           const config = CATEGORY_CONFIG[category];
           const actual = getPercentageOfIncome(category);
@@ -47,24 +47,32 @@ function BudgetComparison() {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.15, delay: 0.12 + index * 0.05 }}
-              className="space-y-1.5"
+              className="space-y-2 sm:space-y-1.5"
             >
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium" style={{ color: config.color }}>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
+                <span
+                  className="text-base sm:text-sm font-semibold"
+                  style={{ color: config.color }}
+                >
                   {config.label}
                 </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground">
-                    Target: {target}% of income
-                  </span>
-                  <span className="font-semibold">
-                    Actual: {actual.toFixed(1)}% of income
-                  </span>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 text-sm">
+                    <span className="text-muted-foreground">
+                      Target: <strong>{target}%</strong>
+                    </span>
+                    <span className="hidden sm:inline text-muted-foreground">
+                      •
+                    </span>
+                    <span className="font-semibold">
+                      Actual: <strong>{actual.toFixed(1)}%</strong>
+                    </span>
+                  </div>
                   <motion.span
                     initial={{ scale: 0.8, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ delay: 0.15 + index * 0.05 }}
-                    className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                    className={`text-xs font-semibold px-2 py-1 rounded-md self-start ${
                       Math.abs(diff) <= 5
                         ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
                         : diff > 0
@@ -77,7 +85,7 @@ function BudgetComparison() {
                   </motion.span>
                 </div>
               </div>
-              <div className="relative h-3 bg-muted rounded-full overflow-hidden">
+              <div className="relative h-4 sm:h-3 bg-muted rounded-full overflow-hidden">
                 <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${Math.min(actual, 100)}%` }}
@@ -105,12 +113,12 @@ function BudgetComparison() {
           transition={{ duration: 0.15, delay: 0.25 }}
           className="pt-4 border-t border-border"
         >
-          <div className="flex items-center justify-between text-sm">
-            <span className="font-medium text-muted-foreground">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
+            <span className="text-base sm:text-sm font-semibold text-muted-foreground">
               Unbudgeted Income
             </span>
             <div className="flex items-center gap-2">
-              <span className="font-semibold">
+              <span className="text-base sm:text-sm font-semibold">
                 {formatCurrency(unbudgeted)} (
                 {totalIncome > 0
                   ? ((unbudgeted / totalIncome) * 100).toFixed(1)
@@ -119,7 +127,7 @@ function BudgetComparison() {
               </span>
             </div>
           </div>
-          <div className="relative h-3 bg-muted rounded-full overflow-hidden mt-2">
+          <div className="relative h-4 sm:h-3 bg-muted rounded-full overflow-hidden mt-3 sm:mt-2">
             <motion.div
               initial={{ width: 0 }}
               animate={{
@@ -140,12 +148,12 @@ function BudgetComparison() {
             />
           </div>
           {unbudgeted < 0 && (
-            <p className="text-xs text-destructive mt-1">
+            <p className="text-sm sm:text-xs text-destructive mt-2 sm:mt-1">
               You&apos;re over budget by {formatCurrency(Math.abs(unbudgeted))}
             </p>
           )}
           {unbudgeted > 0 && (
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-sm sm:text-xs text-muted-foreground mt-2 sm:mt-1">
               {formatCurrency(unbudgeted)} still available to budget
             </p>
           )}
@@ -227,8 +235,18 @@ function BudgetDashboard() {
             transition={{ duration: 0.5, delay: 0.1 }}
             className="flex items-center justify-center gap-4 mb-2"
           >
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-slate-900 via-slate-700 to-slate-900 dark:from-white dark:via-slate-300 dark:to-white bg-clip-text text-transparent">
-              Oversight - Budget Planner
+            <h1 className="text-4xl font-bold bg-linear-to-r from-slate-900 via-slate-700 to-slate-900 dark:from-white dark:via-slate-300 dark:to-white bg-clip-text text-transparent">
+              Oversight
+            </h1>
+          </motion.div>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="flex items-center justify-center gap-4 mb-2"
+          >
+            <h1 className="text-4xl font-bold bg-linear-to-r from-slate-900 via-slate-700 to-slate-900 dark:from-white dark:via-slate-300 dark:to-white bg-clip-text text-transparent">
+              Budget Planner
             </h1>
           </motion.div>
           <motion.p
@@ -237,7 +255,8 @@ function BudgetDashboard() {
             transition={{ duration: 0.5, delay: 0.2 }}
             className="text-muted-foreground text-lg"
           >
-            Manage your money with the{" "}
+            Manage your money
+            <br className="sm:hidden" /> with the{" "}
             <span className="font-semibold text-foreground">50 / 30 / 20</span>{" "}
             rule
           </motion.p>

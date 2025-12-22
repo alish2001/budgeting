@@ -2,14 +2,7 @@
 
 import { useMemo } from "react";
 import { motion } from "framer-motion";
-import {
-  PieChart,
-  Pie,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
-  Legend,
-} from "recharts";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { useBudget } from "@/lib/budget-context";
 import {
   CategoryName,
@@ -224,20 +217,40 @@ export function BudgetPieChart() {
                     return null;
                   }}
                 />
-                <Legend
-                  formatter={(value, entry) => {
-                    const data = chartData.find((d) => d.name === value);
-                    return (
-                      <span style={{ color: entry.color }}>
-                        {value} ({data?.percentage.toFixed(0)}%)
-                      </span>
-                    );
-                  }}
-                />
               </PieChart>
             </ResponsiveContainer>
           </motion.div>
-          <p className="text-xs text-center text-muted-foreground mt-2">
+          {/* Custom Mobile-Friendly Legend */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2, delay: 0.15 }}
+            className="mt-4"
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+              {chartData.map((entry, index) => (
+                <motion.div
+                  key={`legend-${index}`}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.15, delay: 0.2 + index * 0.05 }}
+                  className="flex items-center gap-2 sm:gap-2.5 text-sm"
+                >
+                  <div
+                    className="w-3 h-3 sm:w-2.5 sm:h-2.5 rounded-sm shrink-0"
+                    style={{ backgroundColor: entry.color }}
+                  />
+                  <span className="font-medium" style={{ color: entry.color }}>
+                    {entry.name}
+                  </span>
+                  <span className="text-muted-foreground ml-auto">
+                    ({entry.percentage.toFixed(0)}%)
+                  </span>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+          <p className="text-xs text-center text-muted-foreground mt-3 sm:mt-2">
             Click a segment to see detailed breakdown
           </p>
         </CardContent>
