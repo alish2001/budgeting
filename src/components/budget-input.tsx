@@ -21,6 +21,9 @@ export const BudgetInput = memo(function BudgetInput({
 }: BudgetInputProps) {
   const [label, setLabel] = useState(item?.label || "");
   const [amount, setAmount] = useState(item?.amount.toString() || "");
+  const [labelError, setLabelError] = useState(false);
+  const [amountError, setAmountError] = useState(false);
+  const [buttonShake, setButtonShake] = useState(false);
   const { addItem, updateItem } = useBudget();
   const isEditing = !!item;
 
@@ -37,11 +40,21 @@ export const BudgetInput = memo(function BudgetInput({
     syncItemToState(item);
   }, [item]);
 
+  const validateAmount = useCallback((value: string): boolean => {
+    if (!value || value.trim() === "") return false;
+    const parsed = parseFloat(value);
+    return !isNaN(parsed) && parsed > 0;
+  }, []);
+
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
-      const parsedAmount = parseFloat(amount);
-      if (label.trim() && !isNaN(parsedAmount) && parsedAmount > 0) {
+
+      const isLabelValid = label.trim().length > 0;
+      const isAmountValid = validateAmount(amount);
+
+      if (isLabelValid && isAmountValid) {
+        const parsedAmount = parseFloat(amount);
         if (isEditing && item) {
           updateItem(category, {
             ...item,
@@ -53,11 +66,57 @@ export const BudgetInput = memo(function BudgetInput({
         }
         setLabel("");
         setAmount("");
+        setLabelError(false);
+        setAmountError(false);
         onClose();
+      } else {
+        // Set errors for invalid fields
+        setLabelError(!isLabelValid);
+        setAmountError(!isAmountValid);
+
+        // Trigger button shake animation
+        setButtonShake(true);
       }
     },
-    [addItem, updateItem, amount, category, label, onClose, isEditing, item]
+    [
+      addItem,
+      updateItem,
+      amount,
+      category,
+      label,
+      onClose,
+      isEditing,
+      item,
+      validateAmount,
+    ]
   );
+
+  const handleLabelChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setLabel(e.target.value);
+      if (labelError) {
+        setLabelError(false);
+      }
+    },
+    [labelError]
+  );
+
+  const handleAmountChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setAmount(e.target.value);
+      if (amountError) {
+        setAmountError(false);
+      }
+    },
+    [amountError]
+  );
+
+  useEffect(() => {
+    if (buttonShake) {
+      const timer = setTimeout(() => setButtonShake(false), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [buttonShake]);
 
   return (
     <motion.form
@@ -85,9 +144,10 @@ export const BudgetInput = memo(function BudgetInput({
           type="text"
           placeholder="e.g., Rent, Groceries..."
           value={label}
-          onChange={(e) => setLabel(e.target.value)}
+          onChange={handleLabelChange}
           className="h-8 text-base"
           autoFocus
+          aria-invalid={labelError}
         />
       </motion.div>
       <motion.div
@@ -107,10 +167,11 @@ export const BudgetInput = memo(function BudgetInput({
           type="number"
           placeholder="0.00"
           value={amount}
-          onChange={(e) => setAmount(e.target.value)}
+          onChange={handleAmountChange}
           className="h-8 text-base"
           min="0"
           step="0.01"
+          aria-invalid={amountError}
         />
       </motion.div>
       <motion.div
@@ -119,9 +180,26 @@ export const BudgetInput = memo(function BudgetInput({
         transition={{ delay: 0.1 }}
         className="flex gap-2"
       >
-        <Button type="submit" size="sm" className="flex-1 h-8 text-xs">
-          {isEditing ? "Save" : "Add"}
-        </Button>
+        <motion.div
+          animate={
+            buttonShake
+              ? {
+                  x: [0, -10, 10, -10, 10, 0],
+                }
+              : { x: 0 }
+          }
+          transition={{ duration: 0.5, ease: "easeInOut" }}
+          className="flex-1"
+        >
+          <Button
+            type="submit"
+            size="sm"
+            variant={buttonShake ? "destructive" : "default"}
+            className="flex-1 h-8 text-xs w-full transition-colors duration-150"
+          >
+            {isEditing ? "Save" : "Add"}
+          </Button>
+        </motion.div>
         <Button
           type="button"
           variant="outline"
