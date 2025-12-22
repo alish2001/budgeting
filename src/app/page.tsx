@@ -13,16 +13,24 @@ import {
 } from "@/types/budget";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
+import { TargetSettings } from "@/components/target-settings";
 
 function BudgetComparison() {
-  const { getPercentageOfIncome, getTotalIncome, getUnbudgetedAmount } =
-    useBudget();
+  const {
+    getPercentageOfIncome,
+    getTotalIncome,
+    getUnbudgetedAmount,
+    getTargetPercentage,
+  } = useBudget();
   const totalIncome = getTotalIncome();
   const unbudgeted = getUnbudgetedAmount();
 
   if (totalIncome === 0) return null;
 
   const categories: SpendingCategoryName[] = ["needs", "wants", "savings"];
+  const targetString = `${getTargetPercentage("needs")} / ${getTargetPercentage(
+    "wants"
+  )} / ${getTargetPercentage("savings")}`;
 
   return (
     <motion.div
@@ -32,13 +40,13 @@ function BudgetComparison() {
       className="bg-card border border-border rounded-xl p-4 sm:p-6 mt-6"
     >
       <h3 className="text-sm sm:text-base font-semibold mb-4 sm:mb-6 text-muted-foreground uppercase tracking-wide">
-        50 / 30 / 20 Comparison (of Income)
+        {targetString} Comparison (of Income)
       </h3>
       <div className="space-y-5 sm:space-y-4">
         {categories.map((category, index) => {
           const config = CATEGORY_CONFIG[category];
           const actual = getPercentageOfIncome(category);
-          const target = config.targetPercentage;
+          const target = getTargetPercentage(category);
           const diff = actual - target;
 
           return (
@@ -209,6 +217,12 @@ function ClearButton() {
 }
 
 function BudgetDashboard() {
+  const { getTargetPercentage } = useBudget();
+  const targetNeeds = getTargetPercentage("needs");
+  const targetWants = getTargetPercentage("wants");
+  const targetSavings = getTargetPercentage("savings");
+  const targetString = `${targetNeeds} / ${targetWants} / ${targetSavings}`;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
@@ -257,7 +271,9 @@ function BudgetDashboard() {
           >
             Manage your money
             <br className="sm:hidden" /> with the{" "}
-            <span className="font-semibold text-foreground">50 / 30 / 20</span>{" "}
+            <span className="font-semibold text-foreground">
+              {targetString}
+            </span>{" "}
             rule
           </motion.p>
           <motion.p
@@ -296,7 +312,12 @@ function BudgetDashboard() {
                   />
                   <span>
                     <strong>
-                      {CATEGORY_CONFIG[category].targetPercentage}%
+                      {category === "needs"
+                        ? targetNeeds
+                        : category === "wants"
+                        ? targetWants
+                        : targetSavings}
+                      %
                     </strong>{" "}
                     {CATEGORY_CONFIG[category].label}
                   </span>
@@ -347,6 +368,16 @@ function BudgetDashboard() {
           >
             <BudgetColumns />
           </motion.div>
+        </motion.div>
+
+        {/* Target Settings - Power User Section */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.7 }}
+          className="mt-8"
+        >
+          <TargetSettings />
         </motion.div>
       </div>
     </div>

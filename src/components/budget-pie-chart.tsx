@@ -30,6 +30,7 @@ export function BudgetPieChart() {
     getTotalIncome,
     getUnbudgetedAmount,
     setSelectedCategory,
+    getTargetPercentage,
   } = useBudget();
 
   const totalIncome = getTotalIncome();
@@ -204,10 +205,9 @@ export function BudgetPieChart() {
                           ) : (
                             <p className="text-xs text-muted-foreground mt-1">
                               Target:{" "}
-                              {
-                                CATEGORY_CONFIG[data.category as CategoryName]
-                                  .targetPercentage
-                              }
+                              {getTargetPercentage(
+                                data.category as SpendingCategoryName
+                              )}
                               % of income
                             </p>
                           )}

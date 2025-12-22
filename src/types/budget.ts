@@ -14,8 +14,11 @@ export interface BudgetCategory {
   color: string;
 }
 
+export type TargetPercentages = Record<SpendingCategoryName, number>;
+
 export interface BudgetState {
   categories: Record<CategoryName, BudgetCategory>;
+  targetPercentages: TargetPercentages;
   selectedCategory: CategoryName | "unbudgeted" | null;
 }
 
@@ -28,4 +31,3 @@ export const CATEGORY_CONFIG: Record<
   savings: { targetPercentage: 20, color: "#22c55e", label: "Savings" },
   income: { targetPercentage: 0, color: "#8b5cf6", label: "Income" },
 };
-

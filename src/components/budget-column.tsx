@@ -18,14 +18,20 @@ export const BudgetColumn = memo(function BudgetColumn({
 }: BudgetColumnProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
-  const { state, removeItem, getTotalByCategory, getPercentageByCategory } =
-    useBudget();
+  const {
+    state,
+    removeItem,
+    getTotalByCategory,
+    getPercentageByCategory,
+    getTargetPercentage,
+  } = useBudget();
 
   const config = CATEGORY_CONFIG[category];
   const items = state.categories[category].items;
   const total = getTotalByCategory(category);
   const percentage = getPercentageByCategory(category);
   const isIncome = category === "income";
+  const target = !isIncome ? getTargetPercentage(category) : 0;
 
   return (
     <Card
@@ -45,7 +51,7 @@ export const BudgetColumn = memo(function BudgetColumn({
                 color: config.color,
               }}
             >
-              Target: {config.targetPercentage}%
+              Target: {target}%
             </span>
           )}
         </div>
@@ -55,10 +61,7 @@ export const BudgetColumn = memo(function BudgetColumn({
             <span
               className="text-sm font-medium"
               style={{
-                color:
-                  percentage > config.targetPercentage
-                    ? "#ef4444"
-                    : config.color,
+                color: percentage > target ? "#ef4444" : config.color,
               }}
             >
               ({percentage.toFixed(1)}%)

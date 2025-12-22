@@ -17,6 +17,7 @@ import {
   CategoryName,
   SpendingCategoryName,
   CATEGORY_CONFIG,
+  TargetPercentages,
 } from "@/types/budget";
 
 const STORAGE_KEY = "budget-planner-data";
@@ -38,6 +39,10 @@ type BudgetAction =
   | {
       type: "SET_SELECTED_CATEGORY";
       category: CategoryName | "unbudgeted" | null;
+    }
+  | {
+      type: "UPDATE_TARGET_PERCENTAGES";
+      targets: TargetPercentages;
     }
   | { type: "CLEAR_ALL" }
   | { type: "LOAD_FROM_STORAGE"; state: BudgetState };
@@ -69,6 +74,11 @@ const initialState: BudgetState = {
       color: CATEGORY_CONFIG.income.color,
     },
   },
+  targetPercentages: {
+    needs: CATEGORY_CONFIG.needs.targetPercentage,
+    wants: CATEGORY_CONFIG.wants.targetPercentage,
+    savings: CATEGORY_CONFIG.savings.targetPercentage,
+  },
   selectedCategory: null,
 };
 
@@ -97,6 +107,21 @@ function loadFromStorage(): BudgetState | null {
             items: parsed.categories?.income?.items || [],
           },
         },
+        targetPercentages:
+          parsed.targetPercentages &&
+          typeof parsed.targetPercentages === "object"
+            ? {
+                needs:
+                  Number(parsed.targetPercentages.needs) ||
+                  CATEGORY_CONFIG.needs.targetPercentage,
+                wants:
+                  Number(parsed.targetPercentages.wants) ||
+                  CATEGORY_CONFIG.wants.targetPercentage,
+                savings:
+                  Number(parsed.targetPercentages.savings) ||
+                  CATEGORY_CONFIG.savings.targetPercentage,
+              }
+            : initialState.targetPercentages,
         selectedCategory: null,
       };
     }
@@ -115,6 +140,7 @@ function saveToStorage(state: BudgetState): void {
         savings: { items: state.categories.savings.items },
         income: { items: state.categories.income.items },
       },
+      targetPercentages: state.targetPercentages,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
   } catch (error) {
@@ -170,6 +196,11 @@ function budgetReducer(state: BudgetState, action: BudgetAction): BudgetState {
         ...state,
         selectedCategory: action.category,
       };
+    case "UPDATE_TARGET_PERCENTAGES":
+      return {
+        ...state,
+        targetPercentages: action.targets,
+      };
     default:
       return state;
   }
@@ -182,6 +213,9 @@ interface BudgetContextType {
   removeItem: (category: CategoryName, itemId: string) => void;
   updateItem: (category: CategoryName, item: BudgetItem) => void;
   setSelectedCategory: (category: CategoryName | "unbudgeted" | null) => void;
+  updateTargetPercentages: (targets: TargetPercentages) => void;
+  resetTargetPercentages: () => void;
+  getTargetPercentage: (category: SpendingCategoryName) => number;
   getTotalByCategory: (category: CategoryName) => number;
   getTotalIncome: () => number;
   getUnbudgetedAmount: () => number;
@@ -306,6 +340,28 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
     [totalSpending, getTotalByCategory]
   );
 
+  const updateTargetPercentages = useCallback((targets: TargetPercentages) => {
+    dispatch({ type: "UPDATE_TARGET_PERCENTAGES", targets });
+  }, []);
+
+  const resetTargetPercentages = useCallback(() => {
+    dispatch({
+      type: "UPDATE_TARGET_PERCENTAGES",
+      targets: {
+        needs: CATEGORY_CONFIG.needs.targetPercentage,
+        wants: CATEGORY_CONFIG.wants.targetPercentage,
+        savings: CATEGORY_CONFIG.savings.targetPercentage,
+      },
+    });
+  }, []);
+
+  const getTargetPercentage = useCallback(
+    (category: SpendingCategoryName): number => {
+      return state.targetPercentages[category];
+    },
+    [state.targetPercentages]
+  );
+
   const clearAllData = useCallback(() => {
     dispatch({ type: "CLEAR_ALL" });
     localStorage.removeItem(STORAGE_KEY);
@@ -320,6 +376,9 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
         removeItem,
         updateItem,
         setSelectedCategory,
+        updateTargetPercentages,
+        resetTargetPercentages,
+        getTargetPercentage,
         getTotalByCategory,
         getTotalIncome,
         getUnbudgetedAmount,
