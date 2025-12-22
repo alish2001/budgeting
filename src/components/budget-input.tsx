@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState, useCallback, useEffect } from "react";
+import { memo, useState, useCallback, useEffect, useEffectEvent } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,11 +24,17 @@ export const BudgetInput = memo(function BudgetInput({
   const { addItem, updateItem } = useBudget();
   const isEditing = !!item;
 
-  useEffect(() => {
-    if (item) {
-      setLabel(item.label);
-      setAmount(item.amount.toString());
+  const syncItemToState = useEffectEvent(
+    (currentItem: BudgetItem | undefined) => {
+      if (currentItem) {
+        setLabel(currentItem.label);
+        setAmount(currentItem.amount.toString());
+      }
     }
+  );
+
+  useEffect(() => {
+    syncItemToState(item);
   }, [item]);
 
   const handleSubmit = useCallback(
@@ -37,7 +43,11 @@ export const BudgetInput = memo(function BudgetInput({
       const parsedAmount = parseFloat(amount);
       if (label.trim() && !isNaN(parsedAmount) && parsedAmount > 0) {
         if (isEditing && item) {
-          updateItem(category, { ...item, label: label.trim(), amount: parsedAmount });
+          updateItem(category, {
+            ...item,
+            label: label.trim(),
+            amount: parsedAmount,
+          });
         } else {
           addItem(category, label.trim(), parsedAmount);
         }
@@ -64,7 +74,10 @@ export const BudgetInput = memo(function BudgetInput({
         transition={{ delay: 0.05 }}
         className="space-y-1.5"
       >
-        <Label htmlFor={`label-${category}-${item?.id || "new"}`} className="text-xs font-medium">
+        <Label
+          htmlFor={`label-${category}-${item?.id || "new"}`}
+          className="text-xs font-medium"
+        >
           Label
         </Label>
         <Input
@@ -83,7 +96,10 @@ export const BudgetInput = memo(function BudgetInput({
         transition={{ delay: 0.08 }}
         className="space-y-1.5"
       >
-        <Label htmlFor={`amount-${category}-${item?.id || "new"}`} className="text-xs font-medium">
+        <Label
+          htmlFor={`amount-${category}-${item?.id || "new"}`}
+          className="text-xs font-medium"
+        >
           Amount ($)
         </Label>
         <Input
@@ -119,4 +135,3 @@ export const BudgetInput = memo(function BudgetInput({
     </motion.form>
   );
 });
-

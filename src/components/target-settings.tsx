@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useEffectEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,9 +40,8 @@ export function TargetSettings() {
   const prevTargetPercentagesRef = useRef(state.targetPercentages);
 
   // Sync draft when state changes externally (e.g., after reset)
-  useEffect(() => {
+  const syncDraftFromState = useEffectEvent((current: TargetPercentages) => {
     const prev = prevTargetPercentagesRef.current;
-    const current = state.targetPercentages;
     if (
       prev.needs !== current.needs ||
       prev.wants !== current.wants ||
@@ -51,6 +50,10 @@ export function TargetSettings() {
       setDraft(current);
       prevTargetPercentagesRef.current = current;
     }
+  });
+
+  useEffect(() => {
+    syncDraftFromState(state.targetPercentages);
   }, [state.targetPercentages]);
 
   const total = useMemo(
