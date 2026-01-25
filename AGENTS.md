@@ -16,14 +16,16 @@ The application provides real-time visualization, income tracking, and detailed 
 
 - **Income Tracking**: Multiple income sources with real-time totals
 - **Category Management**: Add, edit, and remove items across Needs, Wants, and Savings
+- **Customizable Targets**: Adjust budget percentages from default 50/30/20 rule
 - **Interactive Visualizations**:
   - Main pie chart showing budget distribution (Needs/Wants/Savings/Unbudgeted)
   - Drill-down category breakdowns
-  - 50/30/20 comparison with progress bars
-- **Data Persistence**: Automatic localStorage sync
+  - Custom target vs actual comparison with progress bars
+- **Data Persistence**: Automatic localStorage sync (includes custom targets)
 - **Dark Mode**: System-aware theme with manual override
 - **Responsive Design**: Optimized for desktop, tablet, and mobile
 - **Performance Optimized**: Fast animations, memoized calculations, efficient re-renders
+- **Analytics & Monitoring**: Vercel Analytics and Speed Insights integration
 
 ## 🛠 Tech Stack
 
@@ -42,6 +44,7 @@ The application provides real-time visualization, income tracking, and detailed 
   - `@radix-ui/react-dialog`
   - `@radix-ui/react-dropdown-menu`
   - `@radix-ui/react-label`
+  - `@radix-ui/react-slider`
   - `@radix-ui/react-slot`
 - **Framer Motion 12.23.26** - Animations
 - **Lucide React 0.562.0** - Icons
@@ -70,10 +73,11 @@ The application provides real-time visualization, income tracking, and detailed 
 - **ESLint 9.39.2** with `eslint-config-next`
 - **tw-animate-css 1.4.0** - Tailwind animations
 
-### Deployment
+### Deployment & Monitoring
 
 - **Vercel** (configured in `vercel.json`)
-- **Vercel Analytics** for tracking
+- **Vercel Analytics 1.6.1** - Web analytics tracking
+- **Vercel Speed Insights 1.3.1** - Performance monitoring
 
 ## 📁 Project Structure
 
@@ -90,12 +94,14 @@ budgeting/
 │   │   │   ├── card.tsx
 │   │   │   ├── dropdown-menu.tsx
 │   │   │   ├── input.tsx
-│   │   │   └── label.tsx
+│   │   │   ├── label.tsx
+│   │   │   └── slider.tsx
 │   │   ├── budget-column.tsx      # Individual category column
 │   │   ├── budget-columns.tsx     # Grid of all columns
 │   │   ├── budget-input.tsx       # Add/edit form
 │   │   ├── budget-pie-chart.tsx   # Main pie chart
 │   │   ├── category-breakdown.tsx # Drill-down view
+│   │   ├── target-settings.tsx     # Customize budget targets
 │   │   ├── theme-provider.tsx     # Theme context wrapper
 │   │   └── theme-toggle.tsx       # Theme switcher component
 │   ├── lib/
@@ -139,6 +145,13 @@ budgeting/
 - **JSX**: react-jsx
 - **Path Aliases**: `@/*` → `./src/*`
 - **Strict Mode**: Enabled
+
+### `next.config.ts`
+
+- **React Strict Mode**: Enabled
+- **Security Headers**: Configured (X-Frame-Options, CSP, HSTS, etc.)
+- **Powered By Header**: Disabled
+- **Metadata**: Comprehensive SEO metadata with OpenGraph and Twitter cards
 
 ### `components.json` (ShadCN)
 
@@ -212,8 +225,8 @@ bun run lint
 
 The application uses React Context API with `useReducer` for global state:
 
-- **State Structure**: `BudgetState` with categories and selected category
-- **Actions**: ADD_ITEM, REMOVE_ITEM, UPDATE_ITEM, SET_SELECTED_CATEGORY, CLEAR_ALL, LOAD_FROM_STORAGE
+- **State Structure**: `BudgetState` with categories, selected category, and target percentages
+- **Actions**: ADD_ITEM, REMOVE_ITEM, UPDATE_ITEM, SET_SELECTED_CATEGORY, UPDATE_TARGET_PERCENTAGES, CLEAR_ALL, LOAD_FROM_STORAGE
 - **Persistence**: Automatic localStorage sync (client-side only)
 - **Hydration**: Uses `useSyncExternalStore` to prevent SSR/client mismatches
 - **Performance**: All context functions are memoized with `useCallback`
@@ -224,6 +237,10 @@ The application uses React Context API with `useReducer` for global state:
 - `getTotalBudgeted()` - Sum of needs/wants/savings
 - `getUnbudgetedAmount()` - Remaining unbudgeted income
 - `getPercentageByCategory()` - Percentage of income for each category
+- `getPercentageOfIncome()` - Percentage of income for spending categories
+- `getTargetPercentage()` - Get target percentage for a category
+- `updateTargetPercentages()` - Update custom target percentages
+- `resetTargetPercentages()` - Reset to default 50/30/20 targets
 
 ### Type System
 
@@ -233,7 +250,8 @@ The application uses React Context API with `useReducer` for global state:
 - `CategoryName`: `"needs" | "wants" | "savings" | "income"`
 - `SpendingCategoryName`: `"needs" | "wants" | "savings"`
 - `BudgetCategory`: Category with items, target percentage, and color
-- `BudgetState`: Complete application state
+- `TargetPercentages`: Record of custom target percentages for spending categories
+- `BudgetState`: Complete application state (includes categories, targetPercentages, selectedCategory)
 - `CATEGORY_CONFIG`: Default colors, labels, and target percentages
 
 ### Component Architecture
@@ -247,7 +265,8 @@ RootLayout (layout.tsx)
           └── BudgetDashboard (page.tsx)
               ├── Header (with ThemeToggle, ClearButton)
               ├── Row 1: ChartSection | BudgetComparison
-              └── Row 2: BudgetColumns (Income | Needs | Wants | Savings)
+              ├── Row 2: BudgetColumns (Income | Needs | Wants | Savings)
+              └── TargetSettings (collapsible customization panel)
 ```
 
 #### Key Components
@@ -278,9 +297,18 @@ RootLayout (layout.tsx)
    - Back button to return to main view
 
 5. **BudgetComparison** (`page.tsx`)
-   - 50/30/20 target vs actual comparison
+   - Custom target vs actual comparison (uses current target percentages)
    - Progress bars with target indicators
    - Unbudgeted income display
+   - Shows difference from target with color-coded badges
+
+6. **TargetSettings** (`target-settings.tsx`)
+   - Collapsible panel for customizing budget targets
+   - Slider and input controls for each category
+   - Validation ensures percentages total 100%
+   - Reset to default 50/30/20
+   - Evenly distribute remaining percentage feature
+   - Visual feedback with success messages
 
 ### Styling System
 
@@ -322,7 +350,9 @@ RootLayout (layout.tsx)
 
 **Storage Key**: `"budget-planner-data"`
 
-**Format**: JSON stringified `BudgetState`
+**Format**: JSON stringified object containing:
+- `categories`: Items for each category (needs, wants, savings, income)
+- `targetPercentages`: Custom target percentages (if modified from defaults)
 
 **Hydration Strategy**:
 
@@ -330,6 +360,7 @@ RootLayout (layout.tsx)
 2. Client hydrates and checks localStorage
 3. If data exists, dispatches `LOAD_FROM_STORAGE` action
 4. Subsequent changes auto-save to localStorage
+5. Custom target percentages are persisted and restored
 
 **Important**: Always check `isHydrated` before rendering components that depend on localStorage.
 
@@ -337,7 +368,7 @@ RootLayout (layout.tsx)
 
 ### Typography
 
-- **Primary Font**: Space Grotesk (weights: 300, 400, 500, 600, 700)
+- **Primary Font**: Space Grotesk (weights: 400, 500, 600, 700)
 - **Monospace Font**: JetBrains Mono (weights: 400, 500)
 - **Display**: `swap` for better perceived performance
 
@@ -376,7 +407,9 @@ RootLayout (layout.tsx)
 2. Add config to `CATEGORY_CONFIG`
 3. Update `initialState` in `budget-context.tsx`
 4. Add to `CATEGORIES` array in `budget-columns.tsx`
-5. Update grid layout if needed
+5. Update `TargetPercentages` type if it's a spending category
+6. Update `TargetSettings` component if it should be customizable
+7. Update grid layout if needed
 
 ### Modifying Animation Speeds
 
@@ -391,6 +424,14 @@ Look for `transition={{ duration: X }}` in components:
 1. Update `CATEGORY_CONFIG` in `src/types/budget.ts`
 2. Update dark mode card colors in `src/app/globals.css` (`.dark` selector)
 3. Ensure contrast ratios meet accessibility standards
+
+### Modifying Target Percentages
+
+1. Default targets are in `CATEGORY_CONFIG` in `src/types/budget.ts`
+2. Users can customize via `TargetSettings` component
+3. Custom targets are stored in `state.targetPercentages` and persisted to localStorage
+4. Always use `getTargetPercentage()` from context, not `CATEGORY_CONFIG` directly
+5. The `BudgetComparison` component automatically uses current targets
 
 ### Adding New Chart Types
 
@@ -505,7 +546,7 @@ Currently no automated tests. For adding tests:
 
 **Project Status**: Active Development
 
-**Last Updated**: 2024
+**Last Updated**: January 2025
 
 ---
 
@@ -518,11 +559,13 @@ When working on this codebase:
 3. **Follow** existing animation patterns (fast for interactive, slower for initial load)
 4. **Memoize** expensive calculations and callbacks
 5. **Test** in both light and dark modes
-6. **Verify** localStorage persistence after changes
+6. **Verify** localStorage persistence after changes (including custom targets)
 7. **Maintain** TypeScript strict mode compliance
 8. **Use** existing UI components from `src/components/ui/` when possible
 9. **Follow** the established file structure
 10. **Update** this document if adding significant features or changing architecture
+11. **Remember** that target percentages are customizable - don't hardcode 50/30/20
+12. **Use** `getTargetPercentage()` to get current targets, not `CATEGORY_CONFIG`
 
 When making changes:
 
