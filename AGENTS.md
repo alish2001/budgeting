@@ -21,6 +21,14 @@ The application provides real-time visualization, income tracking, and detailed 
   - Main pie chart showing budget distribution (Needs/Wants/Savings/Unbudgeted)
   - Drill-down category breakdowns
   - Custom target vs actual comparison with progress bars
+- **Budget Sharing**: Share budgets via URL or code
+  - Compressed, URL-safe encoding using pako (gzip)
+  - Shareable links that auto-import when opened
+  - Copyable codes for manual import
+- **Multi-Budget Storage**: Save and manage multiple budgets locally
+  - Save current budget with custom or auto-generated names
+  - Load, rename, and delete saved budgets
+  - Quick preview of saved budget contents
 - **Data Persistence**: Automatic localStorage sync (includes custom targets)
 - **Dark Mode**: System-aware theme with manual override
 - **Responsive Design**: Optimized for desktop, tablet, and mobile
@@ -67,6 +75,7 @@ The application provides real-time visualization, income tracking, and detailed 
 - **clsx 2.1.1** - Conditional classnames
 - **tailwind-merge 3.4.0** - Tailwind class merging
 - **class-variance-authority 0.7.1** - Component variants
+- **pako 2.1.0** - Gzip compression for budget sharing
 
 ### Development Tools
 
@@ -92,20 +101,27 @@ budgeting/
 │   │   ├── ui/                # ShadCN UI components
 │   │   │   ├── button.tsx
 │   │   │   ├── card.tsx
+│   │   │   ├── dialog.tsx
 │   │   │   ├── dropdown-menu.tsx
 │   │   │   ├── input.tsx
 │   │   │   ├── label.tsx
-│   │   │   └── slider.tsx
+│   │   │   ├── slider.tsx
+│   │   │   └── textarea.tsx
 │   │   ├── budget-column.tsx      # Individual category column
 │   │   ├── budget-columns.tsx     # Grid of all columns
 │   │   ├── budget-input.tsx       # Add/edit form
+│   │   ├── budget-manager.tsx     # Multi-budget save/load UI
 │   │   ├── budget-pie-chart.tsx   # Main pie chart
 │   │   ├── category-breakdown.tsx # Drill-down view
+│   │   ├── import-budget-dialog.tsx  # Import shared budget dialog
+│   │   ├── share-budget-dialog.tsx   # Share budget dialog
 │   │   ├── target-settings.tsx     # Customize budget targets
 │   │   ├── theme-provider.tsx     # Theme context wrapper
 │   │   └── theme-toggle.tsx       # Theme switcher component
 │   ├── lib/
 │   │   ├── budget-context.tsx     # Global state management
+│   │   ├── budget-serialization.ts # Encode/decode for sharing
+│   │   ├── budget-storage.ts      # Multi-budget localStorage
 │   │   └── utils.ts               # Utility functions (cn, formatCurrency)
 │   └── types/
 │       └── budget.ts              # TypeScript type definitions
@@ -226,7 +242,7 @@ bun run lint
 The application uses React Context API with `useReducer` for global state:
 
 - **State Structure**: `BudgetState` with categories, selected category, and target percentages
-- **Actions**: ADD_ITEM, REMOVE_ITEM, UPDATE_ITEM, SET_SELECTED_CATEGORY, UPDATE_TARGET_PERCENTAGES, CLEAR_ALL, LOAD_FROM_STORAGE
+- **Actions**: ADD_ITEM, REMOVE_ITEM, UPDATE_ITEM, SET_SELECTED_CATEGORY, UPDATE_TARGET_PERCENTAGES, CLEAR_ALL, LOAD_FROM_STORAGE, IMPORT_BUDGET
 - **Persistence**: Automatic localStorage sync (client-side only)
 - **Hydration**: Uses `useSyncExternalStore` to prevent SSR/client mismatches
 - **Performance**: All context functions are memoized with `useCallback`
@@ -241,6 +257,8 @@ The application uses React Context API with `useReducer` for global state:
 - `getTargetPercentage()` - Get target percentage for a category
 - `updateTargetPercentages()` - Update custom target percentages
 - `resetTargetPercentages()` - Reset to default 50/30/20 targets
+- `importBudget(data)` - Import a serialized budget (from sharing)
+- `exportBudget()` - Export current budget as serialized format
 
 ### Type System
 
@@ -253,6 +271,9 @@ The application uses React Context API with `useReducer` for global state:
 - `TargetPercentages`: Record of custom target percentages for spending categories
 - `BudgetState`: Complete application state (includes categories, targetPercentages, selectedCategory)
 - `CATEGORY_CONFIG`: Default colors, labels, and target percentages
+- `SerializedBudget`: Compact format for sharing (items without IDs, optional targets)
+- `SerializedBudgetItem`: `{ label: string, amount: number }` (no ID for sharing)
+- `SavedBudget`: Stored budget with id, name, timestamps, and serialized data
 
 ### Component Architecture
 
@@ -263,10 +284,11 @@ RootLayout (layout.tsx)
   └── ThemeProvider
       └── BudgetProvider (budget-context.tsx)
           └── BudgetDashboard (page.tsx)
-              ├── Header (with ThemeToggle, ClearButton)
+              ├── Header (with ThemeToggle, ShareBudgetDialog, ImportBudgetDialog, ClearButton)
               ├── Row 1: ChartSection | BudgetComparison
               ├── Row 2: BudgetColumns (Income | Needs | Wants | Savings)
-              └── TargetSettings (collapsible customization panel)
+              ├── TargetSettings (collapsible customization panel)
+              └── BudgetManager (collapsible saved budgets panel)
 ```
 
 #### Key Components
@@ -310,6 +332,53 @@ RootLayout (layout.tsx)
    - Evenly distribute remaining percentage feature
    - Visual feedback with success messages
 
+7. **ShareBudgetDialog** (`share-budget-dialog.tsx`)
+   - Modal dialog for sharing current budget
+   - Generates shareable URL with encoded budget data
+   - Generates copyable code string
+   - Copy buttons with visual feedback
+
+8. **ImportBudgetDialog** (`import-budget-dialog.tsx`)
+   - Modal dialog for importing shared budgets
+   - Accepts pasted codes or auto-detects URL parameter
+   - Shows preview of budget before importing
+   - Validates codes and shows error messages
+
+9. **BudgetManager** (`budget-manager.tsx`)
+   - Collapsible panel for managing saved budgets
+   - Save current budget with custom or auto-generated name
+   - List saved budgets with load/rename/delete actions
+   - Shows budget summary (income, item counts)
+
+### Serialization System
+
+**Location**: `src/lib/budget-serialization.ts`
+
+The sharing system uses compression and URL-safe encoding:
+
+- `serializeBudget(state)` - Convert state to compact JSON (strips IDs)
+- `encodeBudget(state)` - Compress with pako + base64url encode
+- `decodeBudget(code)` - Decode and decompress shared code
+- `generateShareUrl(state)` - Create full URL with `?budget=` param
+- `getBudgetCodeFromUrl()` - Extract code from URL parameter
+- `clearBudgetFromUrl()` - Remove param without page reload
+- `getBudgetPreview(data)` - Get summary of serialized budget
+
+### Multi-Budget Storage
+
+**Location**: `src/lib/budget-storage.ts`
+
+**Storage Key**: `"budget-planner-saved-budgets"`
+
+- `getSavedBudgets()` - Load all saved budgets array
+- `saveBudgetToStorage(state, name?)` - Save current budget
+- `saveSerializedBudgetToStorage(data, name?)` - Save imported budget
+- `getSavedBudgetById(id)` - Get specific saved budget
+- `updateSavedBudget(id, state)` - Update existing saved budget
+- `renameSavedBudget(id, newName)` - Rename a saved budget
+- `deleteSavedBudget(id)` - Delete a saved budget
+- `generateBudgetName()` - Auto-generate name with timestamp
+
 ### Styling System
 
 **Location**: `src/app/globals.css`
@@ -348,7 +417,7 @@ RootLayout (layout.tsx)
 
 ### Data Persistence
 
-**Storage Key**: `"budget-planner-data"`
+**Current Budget Storage Key**: `"budget-planner-data"`
 
 **Format**: JSON stringified object containing:
 - `categories`: Items for each category (needs, wants, savings, income)
@@ -361,6 +430,20 @@ RootLayout (layout.tsx)
 3. If data exists, dispatches `LOAD_FROM_STORAGE` action
 4. Subsequent changes auto-save to localStorage
 5. Custom target percentages are persisted and restored
+
+**Saved Budgets Storage Key**: `"budget-planner-saved-budgets"`
+
+**Format**: JSON array of `SavedBudget` objects, each containing:
+- `id`: Unique identifier (UUID)
+- `name`: User-provided or auto-generated name
+- `createdAt`: ISO timestamp
+- `lastModifiedAt`: ISO timestamp
+- `data`: SerializedBudget (compact format without IDs)
+
+**URL Sharing**:
+- Budgets can be shared via URL with `?budget=<encoded_data>` parameter
+- On page load, if URL contains budget param, ImportBudgetDialog opens automatically
+- After import or cancel, the URL parameter is cleared without page reload
 
 **Important**: Always check `isHydrated` before rendering components that depend on localStorage.
 
@@ -574,3 +657,155 @@ When making changes:
 - Ensure animations feel snappy for power users
 - Maintain accessibility (ARIA labels, keyboard navigation)
 - Keep bundle size in mind (prefer tree-shakeable imports)
+
+
+# Vercel Guidelines 
+Concise rules for building accessible, fast, delightful UIs. Use MUST/SHOULD/NEVER to guide decisions.
+
+## Interactions
+
+### Keyboard
+
+- MUST: Full keyboard support per [WAI-ARIA APG](https://www.w3.org/WAI/ARIA/apg/patterns/)
+- MUST: Visible focus rings (`:focus-visible`; group with `:focus-within`)
+- MUST: Manage focus (trap, move, return) per APG patterns
+- NEVER: `outline: none` without visible focus replacement
+
+### Targets & Input
+
+- MUST: Hit target ≥24px (mobile ≥44px); if visual <24px, expand hit area
+- MUST: Mobile `<input>` font-size ≥16px to prevent iOS zoom
+- NEVER: Disable browser zoom (`user-scalable=no`, `maximum-scale=1`)
+- MUST: `touch-action: manipulation` to prevent double-tap zoom
+- SHOULD: Set `-webkit-tap-highlight-color` to match design
+
+### Forms
+
+- MUST: Hydration-safe inputs (no lost focus/value)
+- NEVER: Block paste in `<input>`/`<textarea>`
+- MUST: Loading buttons show spinner and keep original label
+- MUST: Enter submits focused input; in `<textarea>`, ⌘/Ctrl+Enter submits
+- MUST: Keep submit enabled until request starts; then disable with spinner
+- MUST: Accept free text, validate after—don't block typing
+- MUST: Allow incomplete form submission to surface validation
+- MUST: Errors inline next to fields; on submit, focus first error
+- MUST: `autocomplete` + meaningful `name`; correct `type` and `inputmode`
+- SHOULD: Disable spellcheck for emails/codes/usernames
+- SHOULD: Placeholders end with `…` and show example pattern
+- MUST: Warn on unsaved changes before navigation
+- MUST: Compatible with password managers & 2FA; allow pasting codes
+- MUST: Trim values to handle text expansion trailing spaces
+- MUST: No dead zones on checkboxes/radios; label+control share one hit target
+
+### State & Navigation
+
+- MUST: URL reflects state (deep-link filters/tabs/pagination/expanded panels)
+- MUST: Back/Forward restores scroll position
+- MUST: Links use `<a>`/`<Link>` for navigation (support Cmd/Ctrl/middle-click)
+- NEVER: Use `<div onClick>` for navigation
+
+### Feedback
+
+- SHOULD: Optimistic UI; reconcile on response; on failure rollback or offer Undo
+- MUST: Confirm destructive actions or provide Undo window
+- MUST: Use polite `aria-live` for toasts/inline validation
+- SHOULD: Ellipsis (`…`) for options opening follow-ups ("Rename…") and loading states ("Loading…")
+
+### Touch & Drag
+
+- MUST: Generous targets, clear affordances; avoid finicky interactions
+- MUST: Delay first tooltip; subsequent peers instant
+- MUST: `overscroll-behavior: contain` in modals/drawers
+- MUST: During drag, disable text selection and set `inert` on dragged elements
+- MUST: If it looks clickable, it must be clickable
+
+### Autofocus
+
+- SHOULD: Autofocus on desktop with single primary input; rarely on mobile
+
+## Animation
+
+- MUST: Honor `prefers-reduced-motion` (provide reduced variant or disable)
+- SHOULD: Prefer CSS > Web Animations API > JS libraries
+- MUST: Animate compositor-friendly props (`transform`, `opacity`) only
+- NEVER: Animate layout props (`top`, `left`, `width`, `height`)
+- NEVER: `transition: all`—list properties explicitly
+- SHOULD: Animate only to clarify cause/effect or add deliberate delight
+- SHOULD: Choose easing to match the change (size/distance/trigger)
+- MUST: Animations interruptible and input-driven (no autoplay)
+- MUST: Correct `transform-origin` (motion starts where it "physically" should)
+- MUST: SVG transforms on `<g>` wrapper with `transform-box: fill-box`
+
+## Layout
+
+- SHOULD: Optical alignment; adjust ±1px when perception beats geometry
+- MUST: Deliberate alignment to grid/baseline/edges—no accidental placement
+- SHOULD: Balance icon/text lockups (weight/size/spacing/color)
+- MUST: Verify mobile, laptop, ultra-wide (simulate ultra-wide at 50% zoom)
+- MUST: Respect safe areas (`env(safe-area-inset-*)`)
+- MUST: Avoid unwanted scrollbars; fix overflows
+- SHOULD: Flex/grid over JS measurement for layout
+
+## Content & Accessibility
+
+- SHOULD: Inline help first; tooltips last resort
+- MUST: Skeletons mirror final content to avoid layout shift
+- MUST: `<title>` matches current context
+- MUST: No dead ends; always offer next step/recovery
+- MUST: Design empty/sparse/dense/error states
+- SHOULD: Curly quotes (" "); avoid widows/orphans (`text-wrap: balance`)
+- MUST: `font-variant-numeric: tabular-nums` for number comparisons
+- MUST: Redundant status cues (not color-only); icons have text labels
+- MUST: Accessible names exist even when visuals omit labels
+- MUST: Use `…` character (not `...`)
+- MUST: `scroll-margin-top` on headings; "Skip to content" link; hierarchical `<h1>`–`<h6>`
+- MUST: Resilient to user-generated content (short/avg/very long)
+- MUST: Locale-aware dates/times/numbers (`Intl.DateTimeFormat`, `Intl.NumberFormat`)
+- MUST: Accurate `aria-label`; decorative elements `aria-hidden`
+- MUST: Icon-only buttons have descriptive `aria-label`
+- MUST: Prefer native semantics (`button`, `a`, `label`, `table`) before ARIA
+- MUST: Non-breaking spaces: `10&nbsp;MB`, `⌘&nbsp;K`, brand names
+
+## Content Handling
+
+- MUST: Text containers handle long content (`truncate`, `line-clamp-*`, `break-words`)
+- MUST: Flex children need `min-w-0` to allow truncation
+- MUST: Handle empty states—no broken UI for empty strings/arrays
+
+## Performance
+
+- SHOULD: Test iOS Low Power Mode and macOS Safari
+- MUST: Measure reliably (disable extensions that skew runtime)
+- MUST: Track and minimize re-renders (React DevTools/React Scan)
+- MUST: Profile with CPU/network throttling
+- MUST: Batch layout reads/writes; avoid reflows/repaints
+- MUST: Mutations (`POST`/`PATCH`/`DELETE`) target <500ms
+- SHOULD: Prefer uncontrolled inputs; controlled inputs cheap per keystroke
+- MUST: Virtualize large lists (>50 items)
+- MUST: Preload above-fold images; lazy-load the rest
+- MUST: Prevent CLS (explicit image dimensions)
+- SHOULD: `<link rel="preconnect">` for CDN domains
+- SHOULD: Critical fonts: `<link rel="preload" as="font">` with `font-display: swap`
+
+## Dark Mode & Theming
+
+- MUST: `color-scheme: dark` on `<html>` for dark themes
+- SHOULD: `<meta name="theme-color">` matches page background
+- MUST: Native `<select>`: explicit `background-color` and `color` (Windows fix)
+
+## Hydration
+
+- MUST: Inputs with `value` need `onChange` (or use `defaultValue`)
+- SHOULD: Guard date/time rendering against hydration mismatch
+
+## Design
+
+- SHOULD: Layered shadows (ambient + direct)
+- SHOULD: Crisp edges via semi-transparent borders + shadows
+- SHOULD: Nested radii: child ≤ parent; concentric
+- SHOULD: Hue consistency: tint borders/shadows/text toward bg hue
+- MUST: Accessible charts (color-blind-friendly palettes)
+- MUST: Meet contrast—prefer [APCA](https://apcacontrast.com/) over WCAG 2
+- MUST: Increase contrast on `:hover`/`:active`/`:focus`
+- SHOULD: Match browser UI to bg
+- SHOULD: Avoid dark color gradient banding (use background images when needed)

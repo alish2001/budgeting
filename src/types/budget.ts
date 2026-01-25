@@ -31,3 +31,32 @@ export const CATEGORY_CONFIG: Record<
   savings: { targetPercentage: 20, color: "#22c55e", label: "Savings" },
   income: { targetPercentage: 0, color: "#8b5cf6", label: "Income" },
 };
+
+// Serialization types for sharing budgets
+export interface SerializedBudgetItem {
+  label: string;
+  amount: number;
+}
+
+export interface SerializedBudget {
+  items: {
+    needs: SerializedBudgetItem[];
+    wants: SerializedBudgetItem[];
+    savings: SerializedBudgetItem[];
+    income: SerializedBudgetItem[];
+  };
+  targets?: {
+    needs: number;
+    wants: number;
+    savings: number;
+  };
+}
+
+// Saved budget types for multi-budget storage
+export interface SavedBudget {
+  id: string;
+  name: string;
+  createdAt: string;
+  lastModifiedAt: string;
+  data: SerializedBudget;
+}

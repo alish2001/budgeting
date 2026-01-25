@@ -18,7 +18,9 @@ import {
   SpendingCategoryName,
   CATEGORY_CONFIG,
   TargetPercentages,
+  SerializedBudget,
 } from "@/types/budget";
+import { serializeBudget } from "./budget-serialization";
 
 const STORAGE_KEY = "budget-planner-data";
 
@@ -28,7 +30,7 @@ function useIsHydrated() {
   return useSyncExternalStore(
     emptySubscribe,
     () => true,
-    () => false
+    () => false,
   );
 }
 
@@ -45,7 +47,8 @@ type BudgetAction =
       targets: TargetPercentages;
     }
   | { type: "CLEAR_ALL" }
-  | { type: "LOAD_FROM_STORAGE"; state: BudgetState };
+  | { type: "LOAD_FROM_STORAGE"; state: BudgetState }
+  | { type: "IMPORT_BUDGET"; data: SerializedBudget };
 
 const initialState: BudgetState = {
   categories: {
@@ -152,6 +155,42 @@ function budgetReducer(state: BudgetState, action: BudgetAction): BudgetState {
   switch (action.type) {
     case "LOAD_FROM_STORAGE":
       return action.state;
+    case "IMPORT_BUDGET": {
+      // Convert serialized data to full state with generated IDs
+      const { data } = action;
+      const categories: CategoryName[] = [
+        "needs",
+        "wants",
+        "savings",
+        "income",
+      ];
+
+      const newCategories = categories.reduce(
+        (acc, category) => {
+          acc[category] = {
+            ...initialState.categories[category],
+            items: (data.items[category] || []).map((item) => ({
+              id: crypto.randomUUID(),
+              label: item.label,
+              amount: item.amount,
+            })),
+          };
+          return acc;
+        },
+        {} as BudgetState["categories"],
+      );
+
+      return {
+        ...state,
+        categories: newCategories,
+        targetPercentages: data.targets || {
+          needs: CATEGORY_CONFIG.needs.targetPercentage,
+          wants: CATEGORY_CONFIG.wants.targetPercentage,
+          savings: CATEGORY_CONFIG.savings.targetPercentage,
+        },
+        selectedCategory: null,
+      };
+    }
     case "CLEAR_ALL":
       return initialState;
     case "ADD_ITEM":
@@ -173,7 +212,7 @@ function budgetReducer(state: BudgetState, action: BudgetAction): BudgetState {
           [action.category]: {
             ...state.categories[action.category],
             items: state.categories[action.category].items.filter(
-              (item) => item.id !== action.itemId
+              (item) => item.id !== action.itemId,
             ),
           },
         },
@@ -186,7 +225,7 @@ function budgetReducer(state: BudgetState, action: BudgetAction): BudgetState {
           [action.category]: {
             ...state.categories[action.category],
             items: state.categories[action.category].items.map((item) =>
-              item.id === action.item.id ? action.item : item
+              item.id === action.item.id ? action.item : item,
             ),
           },
         },
@@ -223,6 +262,8 @@ interface BudgetContextType {
   getPercentageByCategory: (category: CategoryName) => number;
   getPercentageOfIncome: (category: SpendingCategoryName) => number;
   clearAllData: () => void;
+  importBudget: (data: SerializedBudget) => void;
+  exportBudget: () => SerializedBudget;
 }
 
 const BudgetContext = createContext<BudgetContextType | undefined>(undefined);
@@ -259,7 +300,7 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
       };
       dispatch({ type: "ADD_ITEM", category, item });
     },
-    []
+    [],
   );
 
   const removeItem = useCallback((category: CategoryName, itemId: string) => {
@@ -274,24 +315,24 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
     (category: CategoryName | "unbudgeted" | null) => {
       dispatch({ type: "SET_SELECTED_CATEGORY", category });
     },
-    []
+    [],
   );
 
   const getTotalByCategory = useCallback(
     (category: CategoryName): number => {
       return state.categories[category].items.reduce(
         (sum, item) => sum + item.amount,
-        0
+        0,
       );
     },
-    [state.categories]
+    [state.categories],
   );
 
   // Total income from all sources
   const totalIncome = useMemo(() => {
     return state.categories.income.items.reduce(
       (sum, item) => sum + item.amount,
-      0
+      0,
     );
   }, [state.categories.income.items]);
 
@@ -328,7 +369,7 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
       if (totalIncome === 0) return 0;
       return (getTotalByCategory(category) / totalIncome) * 100;
     },
-    [totalIncome, getTotalByCategory]
+    [totalIncome, getTotalByCategory],
   );
 
   // Legacy function - kept for compatibility but calculates as % of spending
@@ -337,7 +378,7 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
       if (totalSpending === 0) return 0;
       return (getTotalByCategory(category) / totalSpending) * 100;
     },
-    [totalSpending, getTotalByCategory]
+    [totalSpending, getTotalByCategory],
   );
 
   const updateTargetPercentages = useCallback((targets: TargetPercentages) => {
@@ -359,13 +400,21 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
     (category: SpendingCategoryName): number => {
       return state.targetPercentages[category];
     },
-    [state.targetPercentages]
+    [state.targetPercentages],
   );
 
   const clearAllData = useCallback(() => {
     dispatch({ type: "CLEAR_ALL" });
     localStorage.removeItem(STORAGE_KEY);
   }, []);
+
+  const importBudget = useCallback((data: SerializedBudget) => {
+    dispatch({ type: "IMPORT_BUDGET", data });
+  }, []);
+
+  const exportBudget = useCallback((): SerializedBudget => {
+    return serializeBudget(state);
+  }, [state]);
 
   return (
     <BudgetContext.Provider
@@ -386,6 +435,8 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
         getPercentageByCategory,
         getPercentageOfIncome,
         clearAllData,
+        importBudget,
+        exportBudget,
       }}
     >
       {children}

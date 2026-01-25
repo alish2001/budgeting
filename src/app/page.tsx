@@ -14,6 +14,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
 import { TargetSettings } from "@/components/target-settings";
+import { ShareBudgetDialog } from "@/components/share-budget-dialog";
+import { ImportBudgetDialog } from "@/components/import-budget-dialog";
+import { BudgetManager } from "@/components/budget-manager";
 
 function BudgetComparison() {
   const {
@@ -224,7 +227,7 @@ function BudgetDashboard() {
   const targetString = `${targetNeeds} / ${targetWants} / ${targetSavings}`;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+    <div className="min-h-screen bg-linear-to-br from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         {/* Theme Toggle - Top Right */}
         <motion.div
@@ -329,8 +332,10 @@ function BudgetDashboard() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.8 }}
-            className="mt-4"
+            className="flex items-center justify-center gap-2 mt-4"
           >
+            <ShareBudgetDialog />
+            <ImportBudgetDialog />
             <ClearButton />
           </motion.div>
         </motion.header>
@@ -378,6 +383,16 @@ function BudgetDashboard() {
           className="mt-8"
         >
           <TargetSettings />
+        </motion.div>
+
+        {/* Budget Manager - Save/Load Multiple Budgets */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.8 }}
+          className="mt-4"
+        >
+          <BudgetManager />
         </motion.div>
       </div>
     </div>

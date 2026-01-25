@@ -150,7 +150,7 @@ export const BudgetColumn = memo(function BudgetColumn({
                           e.stopPropagation();
                           removeItem(category, item.id);
                         }}
-                        className="opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive/80 transition-opacity text-lg leading-none px-1"
+                        className="text-muted-foreground/50 hover:text-destructive transition-colors text-lg leading-none px-1"
                         aria-label={`Remove ${item.label}`}
                       >
                         ×
