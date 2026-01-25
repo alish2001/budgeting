@@ -141,8 +141,18 @@ export function TargetSettings() {
   return (
     <Card className="border border-border/80 bg-card">
       <CardHeader
-        className="flex flex-row items-center justify-between py-3 cursor-pointer hover:bg-muted/50 transition-colors"
+        role="button"
+        tabIndex={0}
+        aria-expanded={isOpen}
+        aria-controls="target-settings-content"
+        className="flex flex-row items-center justify-between py-3 cursor-pointer hover:bg-muted/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-t-lg"
         onClick={() => setIsOpen((prev) => !prev)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setIsOpen((prev) => !prev);
+          }
+        }}
       >
         <CardTitle className="text-base sm:text-lg font-semibold">
           Customize Budget Targets
@@ -168,6 +178,7 @@ export function TargetSettings() {
         {isOpen && (
           <motion.div
             key="content"
+            id="target-settings-content"
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}

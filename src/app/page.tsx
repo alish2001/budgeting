@@ -111,7 +111,7 @@ function BudgetComparison() {
                 <div
                   className="absolute h-full w-0.5 bg-foreground/50"
                   style={{ left: `${target}%` }}
-                  title={`Target: ${target}%`}
+                  aria-hidden="true"
                 />
               </div>
             </motion.div>
@@ -250,20 +250,11 @@ function BudgetDashboard() {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.5, delay: 0.1 }}
-            className="flex items-center justify-center gap-4 mb-2"
+            className="flex flex-col items-center justify-center gap-1 mb-2"
           >
             <h1 className="text-4xl font-bold bg-linear-to-r from-slate-900 via-slate-700 to-slate-900 dark:from-white dark:via-slate-300 dark:to-white bg-clip-text text-transparent">
-              Oversight
-            </h1>
-          </motion.div>
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="flex items-center justify-center gap-4 mb-2"
-          >
-            <h1 className="text-4xl font-bold bg-linear-to-r from-slate-900 via-slate-700 to-slate-900 dark:from-white dark:via-slate-300 dark:to-white bg-clip-text text-transparent">
-              Budget Planner
+              <span className="block">Oversight</span>
+              <span className="block">Budget Planner</span>
             </h1>
           </motion.div>
           <motion.p

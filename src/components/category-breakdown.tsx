@@ -69,11 +69,16 @@ export function CategoryBreakdown() {
     ? CATEGORY_CONFIG[selectedCategory]
     : null;
 
-  const items = isUnbudgeted
-    ? state.categories.income.items
-    : selectedCategory
-    ? state.categories[selectedCategory].items
-    : [];
+  // Memoize items to prevent dependency changes on every render
+  const items = useMemo(() => {
+    if (isUnbudgeted) {
+      return state.categories.income.items;
+    }
+    if (selectedCategory) {
+      return state.categories[selectedCategory].items;
+    }
+    return [];
+  }, [isUnbudgeted, selectedCategory, state.categories]);
 
   const categoryTotal = isUnbudgeted
     ? getTotalIncome()

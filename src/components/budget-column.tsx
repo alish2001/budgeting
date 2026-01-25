@@ -116,6 +116,8 @@ export const BudgetColumn = memo(function BudgetColumn({
                 return (
                   <motion.div
                     key={item.id}
+                    role="button"
+                    tabIndex={0}
                     initial={{ opacity: 0, x: -10, scale: 0.95 }}
                     animate={{ opacity: 1, x: 0, scale: 1 }}
                     exit={{ opacity: 0, x: 10, scale: 0.95 }}
@@ -124,7 +126,7 @@ export const BudgetColumn = memo(function BudgetColumn({
                       delay: Math.min(index * 0.02, 0.1),
                     }}
                     layout
-                    className="flex items-center justify-between p-2 bg-muted/30 rounded-md group hover:bg-muted/50 transition-colors cursor-pointer"
+                    className="flex items-center justify-between p-2 bg-muted/30 rounded-md group hover:bg-muted/50 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     onClick={(e) => {
                       // Don't trigger edit if clicking the remove button
                       if (
@@ -136,6 +138,13 @@ export const BudgetColumn = memo(function BudgetColumn({
                       }
                       setEditingItemId(item.id);
                     }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setEditingItemId(item.id);
+                      }
+                    }}
+                    aria-label={`Edit ${item.label}: ${formatCurrency(item.amount)}`}
                   >
                     <span className="text-sm font-medium truncate flex-1 mr-2">
                       {item.label}

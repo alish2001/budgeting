@@ -215,6 +215,8 @@ The application will be available at `http://localhost:3000`
 3. **Check for errors** in terminal and browser console
 4. **Test** in both light and dark modes
 5. **Verify** localStorage persistence
+6. run `bun lint` to check for errors and fix them
+7. run `bun build` to build the application for production and see if there are any erros
 
 ### Building for Production
 

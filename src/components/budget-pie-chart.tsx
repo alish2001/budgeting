@@ -220,25 +220,30 @@ export function BudgetPieChart() {
               </PieChart>
             </ResponsiveContainer>
           </motion.div>
-          {/* Custom Mobile-Friendly Legend */}
+          {/* Custom Mobile-Friendly Legend - Keyboard Accessible */}
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2, delay: 0.15 }}
             className="mt-4"
+            role="list"
+            aria-label="Budget categories"
           >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
               {chartData.map((entry, index) => (
-                <motion.div
+                <motion.button
                   key={`legend-${index}`}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.15, delay: 0.2 + index * 0.05 }}
-                  className="flex items-center gap-2 sm:gap-2.5 text-sm"
+                  className="flex items-center gap-2 sm:gap-2.5 text-sm text-left w-full p-1.5 rounded-md hover:bg-muted/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  onClick={() => handleClick(entry)}
+                  aria-label={`View ${entry.name} breakdown: ${formatCurrency(entry.value)}, ${entry.percentage.toFixed(0)}% of income`}
                 >
                   <div
                     className="w-3 h-3 sm:w-2.5 sm:h-2.5 rounded-sm shrink-0"
                     style={{ backgroundColor: entry.color }}
+                    aria-hidden="true"
                   />
                   <span className="font-medium" style={{ color: entry.color }}>
                     {entry.name}
@@ -246,7 +251,7 @@ export function BudgetPieChart() {
                   <span className="text-muted-foreground ml-auto">
                     ({entry.percentage.toFixed(0)}%)
                   </span>
-                </motion.div>
+                </motion.button>
               ))}
             </div>
           </motion.div>
