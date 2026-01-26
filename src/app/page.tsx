@@ -11,12 +11,106 @@ import {
   CategoryName,
   SpendingCategoryName,
 } from "@/types/budget";
+import { Command } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
 import { TargetSettings } from "@/components/target-settings";
 import { ShareBudgetDialog } from "@/components/share-budget-dialog";
 import { ImportBudgetDialog } from "@/components/import-budget-dialog";
 import { BudgetManager } from "@/components/budget-manager";
+import { CommandPalette } from "@/components/command-palette";
+import { Edit2, Check, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { useState, useCallback, useRef, useEffect } from "react";
+
+function CurrentBudgetName() {
+  const { state, setCurrentBudgetName, isHydrated, getTotalIncome } = useBudget();
+  const [isEditing, setIsEditing] = useState(false);
+  const [name, setName] = useState(state.currentBudgetName || "");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const totalIncome = getTotalIncome();
+  const hasData = totalIncome > 0 || 
+                  state.categories.needs.items.length > 0 || 
+                  state.categories.wants.items.length > 0 || 
+                  state.categories.savings.items.length > 0;
+
+  useEffect(() => {
+    setName(state.currentBudgetName || "");
+  }, [state.currentBudgetName]);
+
+  useEffect(() => {
+    if (isEditing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [isEditing]);
+
+  const handleSave = useCallback(() => {
+    const trimmed = name.trim();
+    setCurrentBudgetName(trimmed || undefined);
+    setIsEditing(false);
+  }, [name, setCurrentBudgetName]);
+
+  const handleCancel = useCallback(() => {
+    setName(state.currentBudgetName || "");
+    setIsEditing(false);
+  }, [state.currentBudgetName]);
+
+  if (!isHydrated || !hasData) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, delay: 0.5 }}
+      className="flex items-center justify-center gap-2 mb-2"
+    >
+      {isEditing ? (
+        <div className="flex items-center gap-2">
+          <Input
+            ref={inputRef}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSave();
+              if (e.key === "Escape") handleCancel();
+            }}
+            placeholder="Enter budget name..."
+            className="h-8 text-sm w-48"
+          />
+          <button
+            onClick={handleSave}
+            className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-muted transition-colors"
+            aria-label="Save name"
+          >
+            <Check className="h-4 w-4 text-green-600" />
+          </button>
+          <button
+            onClick={handleCancel}
+            className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-muted transition-colors"
+            aria-label="Cancel"
+          >
+            <X className="h-4 w-4 text-muted-foreground" />
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">
+            {state.currentBudgetName || "Unnamed Budget"}
+          </span>
+          <button
+            onClick={() => setIsEditing(true)}
+            className="h-6 w-6 flex items-center justify-center rounded-md hover:bg-muted transition-colors"
+            aria-label="Rename budget"
+          >
+            <Edit2 className="h-3.5 w-3.5 text-muted-foreground" />
+          </button>
+        </div>
+      )}
+    </motion.div>
+  );
+}
 
 function BudgetComparison() {
   const {
@@ -219,6 +313,33 @@ function ClearButton() {
   );
 }
 
+function CommandPaletteButton() {
+  const handleClick = () => {
+    // Dispatch a keyboard event to trigger the command palette
+    const event = new KeyboardEvent("keydown", {
+      key: "k",
+      metaKey: true,
+      bubbles: true,
+    });
+    document.dispatchEvent(event);
+  };
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={handleClick}
+      className="gap-1.5 text-muted-foreground hover:text-foreground h-8"
+    >
+      <Command className="size-3.5" />
+      <span className="hidden sm:inline text-xs">Quick Actions</span>
+      <kbd className="pointer-events-none hidden h-5 select-none items-center gap-0.5 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 sm:flex">
+        <span className="text-xs">⌘</span>K
+      </kbd>
+    </Button>
+  );
+}
+
 function BudgetDashboard() {
   const { getTargetPercentage } = useBudget();
   const targetNeeds = getTargetPercentage("needs");
@@ -229,13 +350,14 @@ function BudgetDashboard() {
   return (
     <div className="min-h-screen bg-linear-to-br from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
-        {/* Theme Toggle - Top Right */}
+        {/* Top Bar - Command Palette & Theme Toggle */}
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.3, delay: 0.2 }}
-          className="flex justify-end mb-4"
+          className="flex justify-end items-center gap-2 mb-4"
         >
+          <CommandPaletteButton />
           <ThemeToggle />
         </motion.div>
 
@@ -270,6 +392,7 @@ function BudgetDashboard() {
             </span>{" "}
             rule
           </motion.p>
+          <CurrentBudgetName />
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -393,6 +516,7 @@ function BudgetDashboard() {
 export default function Home() {
   return (
     <BudgetProvider>
+      <CommandPalette />
       <BudgetDashboard />
     </BudgetProvider>
   );

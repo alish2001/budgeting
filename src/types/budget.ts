@@ -20,6 +20,7 @@ export interface BudgetState {
   categories: Record<CategoryName, BudgetCategory>;
   targetPercentages: TargetPercentages;
   selectedCategory: CategoryName | "unbudgeted" | null;
+  currentBudgetName?: string;
 }
 
 export const CATEGORY_CONFIG: Record<

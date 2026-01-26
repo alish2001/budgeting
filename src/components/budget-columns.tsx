@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { BudgetColumn } from "./budget-column";
+import { BudgetColumn } from "@/components/budget-column";
 import { CategoryName } from "@/types/budget";
 
 const CATEGORIES: CategoryName[] = ["income", "needs", "wants", "savings"];

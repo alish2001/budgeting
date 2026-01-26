@@ -598,6 +598,32 @@ Currently none required. If adding:
 - **Utils**: Shared utilities in `src/lib/utils.ts`
 - **Styles**: Global styles in `src/app/globals.css`
 
+### Import Paths
+
+**MUST**: Always use absolute imports with the `@/` alias for internal modules. This ensures consistency, prevents build issues, and makes refactoring easier.
+
+**Correct**:
+```typescript
+import { useBudget } from "@/lib/budget-context";
+import { BudgetColumn } from "@/components/budget-column";
+import { formatCurrency } from "@/lib/utils";
+import { BudgetItem } from "@/types/budget";
+```
+
+**Incorrect** (relative imports):
+```typescript
+import { useBudget } from "./budget-context";  // ❌ Don't use relative imports
+import { BudgetColumn } from "./budget-column";  // ❌ Don't use relative imports
+```
+
+**Why**: 
+- Relative imports (`./` or `../`) can break during builds, especially with Turbopack and module resolution
+- Absolute imports with `@/` alias are more maintainable and consistent
+- The `@/` alias is configured in `tsconfig.json` to point to `./src/*`
+- This pattern is used throughout the codebase and is required for Vercel builds
+
+**Exception**: Only use relative imports for files in the same directory when importing from sibling files in a tightly-coupled module (rare).
+
 ### Import Order
 
 1. React/Next.js imports

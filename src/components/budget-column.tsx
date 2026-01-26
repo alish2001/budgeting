@@ -11,7 +11,7 @@ import {
 } from "@/types/budget";
 import { useBudget } from "@/lib/budget-context";
 import { formatCurrency } from "@/lib/utils";
-import { BudgetInput } from "./budget-input";
+import { BudgetInput } from "@/components/budget-input";
 
 interface BudgetColumnProps {
   category: CategoryName;

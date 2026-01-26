@@ -20,7 +20,7 @@ import {
   TargetPercentages,
   SerializedBudget,
 } from "@/types/budget";
-import { serializeBudget } from "./budget-serialization";
+import { serializeBudget } from "@/lib/budget-serialization";
 
 const STORAGE_KEY = "budget-planner-data";
 
@@ -48,7 +48,8 @@ type BudgetAction =
     }
   | { type: "CLEAR_ALL" }
   | { type: "LOAD_FROM_STORAGE"; state: BudgetState }
-  | { type: "IMPORT_BUDGET"; data: SerializedBudget };
+  | { type: "IMPORT_BUDGET"; data: SerializedBudget }
+  | { type: "SET_CURRENT_BUDGET_NAME"; name: string | undefined };
 
 const initialState: BudgetState = {
   categories: {
@@ -126,6 +127,7 @@ function loadFromStorage(): BudgetState | null {
               }
             : initialState.targetPercentages,
         selectedCategory: null,
+        currentBudgetName: parsed.currentBudgetName || undefined,
       };
     }
   } catch (error) {
@@ -144,6 +146,7 @@ function saveToStorage(state: BudgetState): void {
         income: { items: state.categories.income.items },
       },
       targetPercentages: state.targetPercentages,
+      currentBudgetName: state.currentBudgetName,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
   } catch (error) {
@@ -240,6 +243,11 @@ function budgetReducer(state: BudgetState, action: BudgetAction): BudgetState {
         ...state,
         targetPercentages: action.targets,
       };
+    case "SET_CURRENT_BUDGET_NAME":
+      return {
+        ...state,
+        currentBudgetName: action.name,
+      };
     default:
       return state;
   }
@@ -264,6 +272,7 @@ interface BudgetContextType {
   clearAllData: () => void;
   importBudget: (data: SerializedBudget) => void;
   exportBudget: () => SerializedBudget;
+  setCurrentBudgetName: (name: string | undefined) => void;
 }
 
 const BudgetContext = createContext<BudgetContextType | undefined>(undefined);
@@ -416,6 +425,10 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
     return serializeBudget(state);
   }, [state]);
 
+  const setCurrentBudgetName = useCallback((name: string | undefined) => {
+    dispatch({ type: "SET_CURRENT_BUDGET_NAME", name });
+  }, []);
+
   return (
     <BudgetContext.Provider
       value={{
@@ -437,6 +450,7 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
         clearAllData,
         importBudget,
         exportBudget,
+        setCurrentBudgetName,
       }}
     >
       {children}
