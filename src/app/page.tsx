@@ -19,6 +19,7 @@ import { ShareBudgetDialog } from "@/components/share-budget-dialog";
 import { ImportBudgetDialog } from "@/components/import-budget-dialog";
 import { BudgetManager } from "@/components/budget-manager";
 import { CommandPalette } from "@/components/command-palette";
+import { BudgetProjectionCard } from "@/components/budget-projection-card";
 import { Edit2, Check, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useState, useCallback, useRef, useEffect } from "react";
@@ -26,7 +27,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 function CurrentBudgetName() {
   const { state, setCurrentBudgetName, isHydrated, getTotalIncome } = useBudget();
   const [isEditing, setIsEditing] = useState(false);
-  const [name, setName] = useState(state.currentBudgetName || "");
+  const [draftName, setDraftName] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   const totalIncome = getTotalIncome();
@@ -36,10 +37,6 @@ function CurrentBudgetName() {
                   state.categories.savings.items.length > 0;
 
   useEffect(() => {
-    setName(state.currentBudgetName || "");
-  }, [state.currentBudgetName]);
-
-  useEffect(() => {
     if (isEditing) {
       inputRef.current?.focus();
       inputRef.current?.select();
@@ -47,15 +44,14 @@ function CurrentBudgetName() {
   }, [isEditing]);
 
   const handleSave = useCallback(() => {
-    const trimmed = name.trim();
+    const trimmed = draftName.trim();
     setCurrentBudgetName(trimmed || undefined);
     setIsEditing(false);
-  }, [name, setCurrentBudgetName]);
+  }, [draftName, setCurrentBudgetName]);
 
   const handleCancel = useCallback(() => {
-    setName(state.currentBudgetName || "");
     setIsEditing(false);
-  }, [state.currentBudgetName]);
+  }, []);
 
   if (!isHydrated || !hasData) return null;
 
@@ -70,8 +66,8 @@ function CurrentBudgetName() {
         <div className="flex items-center gap-2">
           <Input
             ref={inputRef}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            value={draftName}
+            onChange={(e) => setDraftName(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") handleSave();
               if (e.key === "Escape") handleCancel();
@@ -100,7 +96,10 @@ function CurrentBudgetName() {
             {state.currentBudgetName || "Unnamed Budget"}
           </span>
           <button
-            onClick={() => setIsEditing(true)}
+            onClick={() => {
+              setDraftName(state.currentBudgetName || "");
+              setIsEditing(true);
+            }}
             className="h-6 w-6 flex items-center justify-center rounded-md hover:bg-muted transition-colors"
             aria-label="Rename budget"
           >
@@ -487,6 +486,16 @@ function BudgetDashboard() {
           >
             <BudgetColumns />
           </motion.div>
+        </motion.div>
+
+        {/* Projection Card - Below categories, above target settings */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.65 }}
+          className="mt-8"
+        >
+          <BudgetProjectionCard />
         </motion.div>
 
         {/* Target Settings - Power User Section */}
