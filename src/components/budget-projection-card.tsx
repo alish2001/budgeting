@@ -444,7 +444,12 @@ export function BudgetProjectionCard() {
                     transition={{ duration: 0.2 }}
                     className="h-72"
                   >
-                    <ResponsiveContainer width="100%" height="100%">
+                    <ResponsiveContainer
+                      width="100%"
+                      height="100%"
+                      minWidth={0}
+                      minHeight={260}
+                    >
                       <AreaChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
                         <CartesianGrid strokeDasharray="3 3" className="stroke-border/60" />
                         <XAxis dataKey="label" tick={{ fontSize: 12 }} interval="preserveStartEnd" />

@@ -217,7 +217,12 @@ export function CategoryBreakdown() {
                 transition={{ duration: 0.4, delay: 0.3 }}
                 className="h-64"
               >
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                  minWidth={0}
+                  minHeight={200}
+                >
                   <PieChart>
                     <Pie
                       data={chartData}
