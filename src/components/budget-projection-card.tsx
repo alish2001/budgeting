@@ -286,6 +286,7 @@ export function BudgetProjectionCard() {
 
   const projectionNetCashflow = Number(projectionEnd?.netCashflowPerPeriod || 0);
   const projectionNetWorth = Number(projectionEnd?.netWorthProjection || 0);
+  const projectionNetCashflowByEnd = Number(projectionEnd?.netCashflowCumulative || 0);
 
   const formatProjectionTooltipLabel = (label: string | number | undefined) => {
     const value = String(label ?? "");
@@ -836,12 +837,12 @@ export function BudgetProjectionCard() {
                         <p className="text-muted-foreground">Net Cashflow by end</p>
                         <p
                           className={`font-semibold ${
-                            projectionEnd.netCashflowCumulative >= 0
+                            projectionNetCashflowByEnd >= 0
                               ? "text-sky-600 dark:text-sky-400"
                               : "text-destructive"
                           }`}
                         >
-                          {formatCurrency(Number(projectionEnd.netCashflowCumulative || 0))}
+                          {formatCurrency(projectionNetCashflowByEnd)}
                         </p>
                       </div>
                       <div className="rounded-lg border border-border/70 p-3">
