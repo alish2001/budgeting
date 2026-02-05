@@ -127,7 +127,7 @@ function CurrentBudgetName() {
       ) : (
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">
-            {state.currentBudgetName || "Unnamed Budget"}
+            {state.currentBudgetName || "Budget"}
           </span>
           <button
             onClick={() => {

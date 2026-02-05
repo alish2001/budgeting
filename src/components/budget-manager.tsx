@@ -26,7 +26,6 @@ import {
   Check,
   X,
   FolderOpen,
-  Plus,
   Loader2,
 } from "lucide-react";
 
@@ -72,8 +71,6 @@ export function BudgetManager() {
   const [isSaving, setIsSaving] = useState(false);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
   const [loadingId, setLoadingId] = useState<string | null>(null);
-  const [editingCurrentName, setEditingCurrentName] = useState(false);
-  const [currentNameInput, setCurrentNameInput] = useState("");
 
   // Use useSyncExternalStore to read saved budgets from localStorage
   const savedBudgets = useSyncExternalStore(
@@ -82,23 +79,31 @@ export function BudgetManager() {
     getServerSnapshot
   );
 
+  const totalIncome = getTotalIncome();
+  const hasCurrentBudget =
+    totalIncome > 0 ||
+    state.categories.needs.items.length > 0 ||
+    state.categories.wants.items.length > 0 ||
+    state.categories.savings.items.length > 0;
+  const saveNameInputValue = newBudgetName || state.currentBudgetName || "";
+
   const handleSaveBudget = useCallback(() => {
-    if (isSaving) return;
+    if (isSaving || !hasCurrentBudget) return;
 
     setIsSaving(true);
 
     setTimeout(() => {
-      // Use current budget name if set, otherwise use input or generate
-      const name = state.currentBudgetName || newBudgetName.trim() || generateBudgetName();
+      const name = newBudgetName.trim() || state.currentBudgetName || generateBudgetName();
       saveBudgetToStorage(state, name);
+      setCurrentBudgetName(name);
       notifyBudgetStorageChange();
-      setNewBudgetName("");
+      setNewBudgetName(name);
       setIsSaving(false);
       setShowSaveSuccess(true);
 
       setTimeout(() => setShowSaveSuccess(false), 2000);
     }, 300);
-  }, [state, newBudgetName, isSaving]);
+  }, [state, newBudgetName, isSaving, hasCurrentBudget, setCurrentBudgetName]);
 
   const handleLoadBudget = useCallback(
     (budget: SavedBudget) => {
@@ -106,10 +111,11 @@ export function BudgetManager() {
 
       setTimeout(() => {
         importBudget(budget.data);
+        setCurrentBudgetName(budget.name);
         setLoadingId(null);
       }, 300);
     },
-    [importBudget]
+    [importBudget, setCurrentBudgetName]
   );
 
   const handleDeleteBudget = useCallback((id: string) => {
@@ -138,23 +144,6 @@ export function BudgetManager() {
     setEditName("");
   }, []);
 
-  const handleStartRenameCurrent = useCallback(() => {
-    setEditingCurrentName(true);
-    setCurrentNameInput(state.currentBudgetName || "");
-  }, [state.currentBudgetName]);
-
-  const handleSaveCurrentName = useCallback(() => {
-    const trimmed = currentNameInput.trim();
-    setCurrentBudgetName(trimmed || undefined);
-    setEditingCurrentName(false);
-    setCurrentNameInput("");
-  }, [currentNameInput, setCurrentBudgetName]);
-
-  const handleCancelCurrentName = useCallback(() => {
-    setEditingCurrentName(false);
-    setCurrentNameInput("");
-  }, []);
-
   const getBudgetSummary = (data: SerializedBudget) => {
     const totalIncome = data.items.income.reduce(
       (sum, item) => sum + item.amount,
@@ -167,13 +156,6 @@ export function BudgetManager() {
       data.items.income.length;
     return { totalIncome, totalItems };
   };
-
-  const totalIncome = getTotalIncome();
-  const hasCurrentBudget =
-    totalIncome > 0 ||
-    state.categories.needs.items.length > 0 ||
-    state.categories.wants.items.length > 0 ||
-    state.categories.savings.items.length > 0;
 
   if (!isHydrated) return null;
 
@@ -231,76 +213,17 @@ export function BudgetManager() {
             transition={{ duration: 0.2 }}
           >
             <CardContent className="space-y-5 pt-2 pb-5">
-              {/* Current Budget Name */}
-              {hasCurrentBudget && (
-                <div className="space-y-2 rounded-lg border border-border/60 p-3">
-                  <Label className="text-xs font-medium text-muted-foreground">
-                    Current Budget Name
-                  </Label>
-                  {editingCurrentName ? (
-                    <div className="flex items-center gap-2">
-                      <Input
-                        value={currentNameInput}
-                        onChange={(e) => setCurrentNameInput(e.target.value)}
-                        className="h-8 text-sm flex-1"
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") handleSaveCurrentName();
-                          if (e.key === "Escape") handleCancelCurrentName();
-                        }}
-                        placeholder="Enter budget name..."
-                      />
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 shrink-0"
-                        onClick={handleSaveCurrentName}
-                        aria-label="Save name"
-                      >
-                        <Check className="h-3.5 w-3.5 text-green-600" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 shrink-0"
-                        onClick={handleCancelCurrentName}
-                        aria-label="Cancel rename"
-                      >
-                        <X className="h-3.5 w-3.5 text-muted-foreground" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium truncate flex-1">
-                        {state.currentBudgetName || "Unnamed Budget"}
-                      </p>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 shrink-0"
-                        onClick={handleStartRenameCurrent}
-                        aria-label="Rename current budget"
-                      >
-                        <Edit2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    This name will be used when you save this budget.
-                  </p>
-                </div>
-              )}
-
               {/* Save Current Budget */}
               <div className="space-y-3 rounded-lg border border-border/60 p-4">
                 <Label className="text-sm font-semibold flex items-center gap-2">
-                  <Plus className="h-4 w-4" />
-                  Save Current Budget
+                  <Save className="h-4 w-4" />
+                  Save Budget
                 </Label>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <Input
-                    placeholder={state.currentBudgetName || generateBudgetName()}
-                    value={newBudgetName}
+                    id="save-budget-name"
+                    placeholder={generateBudgetName()}
+                    value={saveNameInputValue}
                     onChange={(e) => setNewBudgetName(e.target.value)}
                     className="flex-1"
                     disabled={isSaving || !hasCurrentBudget}
@@ -331,6 +254,11 @@ export function BudgetManager() {
                 {!hasCurrentBudget && (
                   <p className="text-xs text-muted-foreground">
                     Add some budget items first before saving.
+                  </p>
+                )}
+                {hasCurrentBudget && (
+                  <p className="text-xs text-muted-foreground">
+                    Update the name if needed, then click save.
                   </p>
                 )}
               </div>

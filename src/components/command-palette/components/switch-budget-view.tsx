@@ -17,7 +17,7 @@ interface SwitchBudgetViewProps {
 }
 
 export function SwitchBudgetView({ onCancel, onSuccess }: SwitchBudgetViewProps) {
-  const { importBudget, isHydrated } = useBudget();
+  const { importBudget, isHydrated, setCurrentBudgetName } = useBudget();
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
@@ -41,6 +41,7 @@ export function SwitchBudgetView({ onCancel, onSuccess }: SwitchBudgetViewProps)
 
     setTimeout(() => {
       importBudget(budget.data);
+      setCurrentBudgetName(budget.name);
       setLoadingId(null);
       onSuccess();
     }, 300);

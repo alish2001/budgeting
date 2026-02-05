@@ -21,6 +21,7 @@ import {
   SerializedBudget,
 } from "@/types/budget";
 import { serializeBudget } from "@/lib/budget-serialization";
+import { generateBudgetName } from "@/lib/budget-storage";
 
 const STORAGE_KEY = "budget-planner-data";
 
@@ -91,24 +92,38 @@ function loadFromStorage(): BudgetState | null {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
+      const needsItems = parsed.categories?.needs?.items || [];
+      const wantsItems = parsed.categories?.wants?.items || [];
+      const savingsItems = parsed.categories?.savings?.items || [];
+      const incomeItems = parsed.categories?.income?.items || [];
+      const hasBudgetItems =
+        needsItems.length > 0 ||
+        wantsItems.length > 0 ||
+        savingsItems.length > 0 ||
+        incomeItems.length > 0;
+      const storedName =
+        typeof parsed.currentBudgetName === "string"
+          ? parsed.currentBudgetName.trim()
+          : "";
+
       return {
         ...initialState,
         categories: {
           needs: {
             ...initialState.categories.needs,
-            items: parsed.categories?.needs?.items || [],
+            items: needsItems,
           },
           wants: {
             ...initialState.categories.wants,
-            items: parsed.categories?.wants?.items || [],
+            items: wantsItems,
           },
           savings: {
             ...initialState.categories.savings,
-            items: parsed.categories?.savings?.items || [],
+            items: savingsItems,
           },
           income: {
             ...initialState.categories.income,
-            items: parsed.categories?.income?.items || [],
+            items: incomeItems,
           },
         },
         targetPercentages:
@@ -127,7 +142,8 @@ function loadFromStorage(): BudgetState | null {
               }
             : initialState.targetPercentages,
         selectedCategory: null,
-        currentBudgetName: parsed.currentBudgetName || undefined,
+        currentBudgetName:
+          storedName || (hasBudgetItems ? generateBudgetName() : undefined),
       };
     }
   } catch (error) {
@@ -281,6 +297,11 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(budgetReducer, initialState);
   const isHydrated = useIsHydrated();
   const hasLoadedFromStorage = useRef(false);
+  const hasBudgetItems =
+    state.categories.income.items.length > 0 ||
+    state.categories.needs.items.length > 0 ||
+    state.categories.wants.items.length > 0 ||
+    state.categories.savings.items.length > 0;
 
   // Load from localStorage after hydration (client-side only)
   useEffect(() => {
@@ -299,6 +320,18 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
       saveToStorage(state);
     }
   }, [state]);
+
+  // Keep a usable default name whenever a budget has data.
+  useEffect(() => {
+    if (!hasLoadedFromStorage.current || !hasBudgetItems || state.currentBudgetName) {
+      return;
+    }
+
+    dispatch({
+      type: "SET_CURRENT_BUDGET_NAME",
+      name: generateBudgetName(),
+    });
+  }, [hasBudgetItems, state.currentBudgetName]);
 
   const addItem = useCallback(
     (category: CategoryName, label: string, amount: number) => {
