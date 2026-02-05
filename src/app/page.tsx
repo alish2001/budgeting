@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Link from "next/link";
 import { BudgetProvider, useBudget } from "@/lib/budget-context";
 import { BudgetColumns } from "@/components/budget-columns";
 import { BudgetPieChart } from "@/components/budget-pie-chart";
@@ -107,6 +108,49 @@ function CurrentBudgetName() {
           </button>
         </div>
       )}
+    </motion.div>
+  );
+}
+
+function GettingStarted() {
+  const { state, isHydrated, getTotalIncome } = useBudget();
+  const totalIncome = getTotalIncome();
+  const hasData =
+    totalIncome > 0 ||
+    state.categories.needs.items.length > 0 ||
+    state.categories.wants.items.length > 0 ||
+    state.categories.savings.items.length > 0;
+
+  if (!isHydrated || hasData) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, delay: 0.35 }}
+      className="bg-card border border-border rounded-xl p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+    >
+      <div className="min-w-0">
+        <h2 className="text-base sm:text-lg font-semibold">
+          New to Oversight?
+        </h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Start a guided setup to fill Income, Needs, Wants, and Savings — then
+          land back on your dashboard.
+        </p>
+        <p className="text-xs text-muted-foreground mt-2">
+          Tip: open the command menu with{" "}
+          <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px] font-mono">
+            ⌘K
+          </kbd>
+          .
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        <Button asChild>
+          <Link href="/onboarding">Start onboarding</Link>
+        </Button>
+      </div>
     </motion.div>
   );
 }
@@ -328,6 +372,7 @@ function CommandPaletteButton() {
       variant="outline"
       size="sm"
       onClick={handleClick}
+      aria-label="Open command menu"
       className="gap-1.5 text-muted-foreground hover:text-foreground h-8"
     >
       <Command className="size-3.5" />
@@ -460,6 +505,8 @@ function BudgetDashboard() {
           transition={{ duration: 0.5, delay: 0.3 }}
           className="space-y-6"
         >
+          <GettingStarted />
+
           {/* First Row: Pie Chart and Comparison Side by Side */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <motion.div

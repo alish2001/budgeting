@@ -6,6 +6,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "next-themes";
+import { useRouter } from "next/navigation";
 import {
   Plus,
   Pencil,
@@ -22,6 +23,7 @@ import {
   Download,
   FolderOpen,
   Edit2,
+  Sparkles,
 } from "lucide-react";
 import { useBudget } from "@/lib/budget-context";
 import {
@@ -56,6 +58,7 @@ export function CommandPalette() {
   const [search, setSearch] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const { theme, setTheme } = useTheme();
+  const router = useRouter();
   const {
     state,
     removeItem,
@@ -165,6 +168,10 @@ export function CommandPalette() {
           setMode({ type: "rename-budget" });
           setSearch("");
           break;
+        case "onboarding":
+          closePalette();
+          setTimeout(() => router.push("/onboarding"), 170);
+          break;
         case "toggle-theme":
           setTheme(theme === "dark" ? "light" : "dark");
           closePalette();
@@ -173,7 +180,7 @@ export function CommandPalette() {
           break;
       }
     },
-    [theme, setTheme, closePalette]
+    [theme, setTheme, closePalette, router]
   );
 
   // Handle item selection for edit
@@ -389,6 +396,18 @@ export function CommandPalette() {
                   >
                     <FolderOpen className="size-4" />
                     <span className="flex-1">Switch Budget</span>
+                  </Command.Item>
+                </Command.Group>
+
+                {/* Navigate */}
+                <Command.Group heading="Navigate" className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                  <Command.Item
+                    value="Start Onboarding"
+                    onSelect={() => handleSelect("onboarding")}
+                    className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
+                  >
+                    <Sparkles className="size-4" />
+                    <span className="flex-1">Start Onboarding…</span>
                   </Command.Item>
                 </Command.Group>
 
