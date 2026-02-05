@@ -98,6 +98,7 @@ export function BudgetProjectionCard() {
   const [breakdownMode, setBreakdownMode] = useState<BreakdownMode>("itemized");
   const [projectionMonths, setProjectionMonths] = useState(12);
   const [annualInterestRate, setAnnualInterestRate] = useState(4);
+  const [currentNetWorth, setCurrentNetWorth] = useState(0);
 
   const glowOpacity = useMotionValue(0);
 
@@ -156,6 +157,7 @@ export function BudgetProjectionCard() {
 
     for (let month = 1; month <= projectionMonths; month += 1) {
       const netCashflowPerPeriod = monthlyIncome - monthlyNeeds - monthlyWants - monthlySavings;
+      const netCashflowCumulative = netCashflowPerPeriod * month;
       const row: ProjectionPoint = {
         month,
         label: `M${month}`,
@@ -163,6 +165,7 @@ export function BudgetProjectionCard() {
         wants: roundCurrency(monthlyWants * month),
         savingsContribution: roundCurrency(monthlySavings * month),
         netCashflowPerPeriod: roundCurrency(netCashflowPerPeriod),
+        netCashflowCumulative: roundCurrency(netCashflowCumulative),
       };
 
       for (const item of itemSeries) {
@@ -174,7 +177,7 @@ export function BudgetProjectionCard() {
       row.savingsWithInterest = roundCurrency(savingsWithInterest);
       row.savingsContribution = roundCurrency(savingsContribution);
       row.netWorthProjection = roundCurrency(
-        savingsWithInterest + netCashflowPerPeriod * month,
+        currentNetWorth + savingsWithInterest + netCashflowCumulative,
       );
 
       points.push(row);
@@ -189,6 +192,7 @@ export function BudgetProjectionCard() {
     monthlySavings,
     monthlyWants,
     projectionMonths,
+    currentNetWorth,
   ]);
 
   const useYearAxis = projectionMonths > 12;
@@ -240,7 +244,7 @@ export function BudgetProjectionCard() {
         },
         {
           dataKey: "netWorthProjection",
-          label: "Projected Net Worth",
+          label: "Projected Net Worth (Incl. Current)",
           color: "#64748b",
           kind: "line",
         },
@@ -267,7 +271,7 @@ export function BudgetProjectionCard() {
     });
     itemized.push({
       dataKey: "netWorthProjection",
-      label: "Projected Net Worth",
+      label: "Projected Net Worth (Incl. Current)",
       color: "#64748b",
       kind: "line",
     });
@@ -328,7 +332,7 @@ export function BudgetProjectionCard() {
         </p>
         <div className="max-h-64 space-y-1.5 overflow-y-auto pr-1">
           {rows.map((row) => {
-            const isNetWorth = row.label === "Projected Net Worth";
+            const isNetWorth = row.label.startsWith("Projected Net Worth");
             return (
               <div
                 key={row.key}
@@ -680,7 +684,7 @@ export function BudgetProjectionCard() {
                                 })}
                               </div>
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                               <div className="space-y-2">
                                 <Label htmlFor="assumption-mode">
                                   Assume budget entries are
@@ -718,7 +722,28 @@ export function BudgetProjectionCard() {
                                   className="h-9 text-base sm:text-sm"
                                 />
                               </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="current-net-worth">
+                                  Current net worth
+                                </Label>
+                                <Input
+                                  id="current-net-worth"
+                                  name="currentNetWorth"
+                                  type="number"
+                                  inputMode="decimal"
+                                  step={100}
+                                  value={currentNetWorth}
+                                  onChange={(event) =>
+                                    setCurrentNetWorth(Number(event.target.value) || 0)
+                                  }
+                                  className="h-9 text-base sm:text-sm"
+                                />
+                              </div>
                             </div>
+                            <p className="text-xs text-muted-foreground">
+                              Projected net worth includes your current net worth, cumulative net
+                              cashflow, and savings with interest.
+                            </p>
                           </div>
                         </motion.div>
                       )}
@@ -808,7 +833,21 @@ export function BudgetProjectionCard() {
                         </p>
                       </div>
                       <div className="rounded-lg border border-border/70 p-3">
-                        <p className="text-muted-foreground">Projected Net Worth</p>
+                        <p className="text-muted-foreground">Net Cashflow by end</p>
+                        <p
+                          className={`font-semibold ${
+                            projectionEnd.netCashflowCumulative >= 0
+                              ? "text-sky-600 dark:text-sky-400"
+                              : "text-destructive"
+                          }`}
+                        >
+                          {formatCurrency(Number(projectionEnd.netCashflowCumulative || 0))}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-border/70 p-3">
+                        <p className="text-muted-foreground">
+                          Projected Net Worth (Incl. Current)
+                        </p>
                         <p className="font-semibold text-slate-700 dark:text-slate-300">
                           {formatCurrency(projectionNetWorth)}
                         </p>
