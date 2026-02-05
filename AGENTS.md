@@ -17,10 +17,21 @@ The application provides real-time visualization, income tracking, and detailed 
 - **Income Tracking**: Multiple income sources with real-time totals
 - **Category Management**: Add, edit, and remove items across Needs, Wants, and Savings
 - **Customizable Targets**: Adjust budget percentages from default 50/30/20 rule
+- **Guided Onboarding**: Step-by-step setup flow at `/onboarding` with review/confirm dialogs
+- **Command Palette (`Cmd/Ctrl+K`)**:
+  - Quick actions for add/edit/remove/import/share/switch budget
+  - Built-in **theme picker** action (light/dark toggle)
+  - Built-in **design language picker** (Cyberpunk / Delight)
+  - Mounted on dashboard route (`/`) only
+- **Design Language System**:
+  - **Delight** (default): onboarding-inspired monochrome grid aesthetic with pastel accents
+  - **Cyberpunk**: original vivid gradient style
+  - Works across dashboard and onboarding routes
 - **Interactive Visualizations**:
   - Main pie chart showing budget distribution (Needs/Wants/Savings/Unbudgeted)
   - Drill-down category breakdowns
   - Custom target vs actual comparison with progress bars
+  - Future projection chart with itemized/category modes
 - **Budget Sharing**: Share budgets via URL or code
   - Compressed, URL-safe encoding using pako (gzip)
   - Shareable links that auto-import when opened
@@ -29,8 +40,8 @@ The application provides real-time visualization, income tracking, and detailed 
   - Save current budget with custom or auto-generated names
   - Load, rename, and delete saved budgets
   - Quick preview of saved budget contents
-- **Data Persistence**: Automatic localStorage sync (includes custom targets)
-- **Dark Mode**: System-aware theme with manual override
+- **Data Persistence**: Automatic localStorage sync (budget data, saved budgets, design language)
+- **Theme + Design Controls**: System-aware dark mode, theme dropdown, and command-palette theme/design switching
 - **Responsive Design**: Optimized for desktop, tablet, and mobile
 - **Performance Optimized**: Fast animations, memoized calculations, efficient re-renders
 - **Analytics & Monitoring**: Vercel Analytics and Speed Insights integration
@@ -54,6 +65,7 @@ The application provides real-time visualization, income tracking, and detailed 
   - `@radix-ui/react-label`
   - `@radix-ui/react-slider`
   - `@radix-ui/react-slot`
+  - `@radix-ui/react-visually-hidden`
 - **Framer Motion 12.23.26** - Animations
 - **Lucide React 0.562.0** - Icons
 
@@ -69,6 +81,8 @@ The application provides real-time visualization, income tracking, and detailed 
 ### Theme Management
 
 - **next-themes 0.4.6** - Theme switching
+- **Custom design-language context** (`src/lib/design-language-context.tsx`) - Delight/Cyberpunk switching + persistence
+- **cmdk 1.1.1** - Command palette surface for theme/design picker actions
 
 ### Utilities
 
@@ -94,9 +108,11 @@ The application provides real-time visualization, income tracking, and detailed 
 budgeting/
 ├── src/
 │   ├── app/                    # Next.js App Router
-│   │   ├── layout.tsx         # Root layout with ThemeProvider
-│   │   ├── page.tsx           # Main dashboard page
-│   │   └── globals.css        # Global styles & theme variables
+│   │   ├── layout.tsx          # Root layout with ThemeProvider + DesignLanguageProvider
+│   │   ├── page.tsx            # Main dashboard page
+│   │   ├── onboarding/
+│   │   │   └── page.tsx        # Onboarding route entrypoint
+│   │   └── globals.css         # Global styles, token system, design-language overrides
 │   ├── components/
 │   │   ├── ui/                # ShadCN UI components
 │   │   │   ├── button.tsx
@@ -112,8 +128,17 @@ budgeting/
 │   │   ├── budget-input.tsx       # Add/edit form
 │   │   ├── budget-manager.tsx     # Multi-budget save/load UI
 │   │   ├── budget-pie-chart.tsx   # Main pie chart
+│   │   ├── budget-projection-card.tsx # Future projection visualization
 │   │   ├── category-breakdown.tsx # Drill-down view
+│   │   ├── command-palette/
+│   │   │   ├── index.tsx          # Cmd/Ctrl+K command palette (dashboard-only mount)
+│   │   │   ├── components/        # Palette subviews/forms
+│   │   │   ├── constants.ts       # Palette icon/category constants
+│   │   │   ├── hooks/             # Palette data hooks
+│   │   │   └── types.ts           # Palette mode/view types
 │   │   ├── import-budget-dialog.tsx  # Import shared budget dialog
+│   │   ├── onboarding/
+│   │   │   └── onboarding-flow.tsx # Guided onboarding flow UI
 │   │   ├── share-budget-dialog.tsx   # Share budget dialog
 │   │   ├── target-settings.tsx     # Customize budget targets
 │   │   ├── theme-provider.tsx     # Theme context wrapper
@@ -122,6 +147,8 @@ budgeting/
 │   │   ├── budget-context.tsx     # Global state management
 │   │   ├── budget-serialization.ts # Encode/decode for sharing
 │   │   ├── budget-storage.ts      # Multi-budget localStorage
+│   │   ├── design-language-context.tsx # Design language state + persistence
+│   │   ├── design-language.ts     # Design language types + color mappings
 │   │   └── utils.ts               # Utility functions (cn, formatCurrency)
 │   └── types/
 │       └── budget.ts              # TypeScript type definitions
@@ -213,8 +240,8 @@ The application will be available at `http://localhost:3000`
 1. **Make changes** to files in `src/`
 2. **Hot reload** is automatic (Turbopack)
 3. **Check for errors** in terminal and browser console
-4. **Test** in both light and dark modes
-5. **Verify** localStorage persistence
+4. **Test** in both light and dark modes and both design languages (Delight/Cyberpunk)
+5. **Verify** localStorage persistence (`budget-planner-data`, `budget-planner-saved-budgets`, `budget-planner-design-language`)
 6. run `bun lint` to check for errors and fix them
 7. run `bun build` to build the application for production and see if there are any erros
 
@@ -262,6 +289,23 @@ The application uses React Context API with `useReducer` for global state:
 - `importBudget(data)` - Import a serialized budget (from sharing)
 - `exportBudget()` - Export current budget as serialized format
 
+### Design Language State Management
+
+**Locations**: `src/lib/design-language-context.tsx`, `src/lib/design-language.ts`
+
+The application uses a dedicated context for UI design language selection:
+
+- **Type**: `DesignLanguage = "cyberpunk" | "delight"`
+- **Default**: `delight`
+- **Persistence Key**: `"budget-planner-design-language"`
+- **Hydration-safe reads**: `useSyncExternalStore` + pre-hydration inline script in `layout.tsx`
+- **DOM Sync**: sets `document.documentElement.dataset.designLanguage` for CSS token overrides
+- **Primary API**:
+  - `useDesignLanguage()` hook
+  - `setDesignLanguage("cyberpunk" | "delight")`
+  - `getCategoryColor(category, designLanguage)`
+  - `getItemizedCategoryPalette(category, designLanguage)`
+
 ### Type System
 
 **Location**: `src/types/budget.ts`
@@ -284,13 +328,20 @@ The application uses React Context API with `useReducer` for global state:
 ```
 RootLayout (layout.tsx)
   └── ThemeProvider
-      └── BudgetProvider (budget-context.tsx)
-          └── BudgetDashboard (page.tsx)
-              ├── Header (with ThemeToggle, ShareBudgetDialog, ImportBudgetDialog, ClearButton)
-              ├── Row 1: ChartSection | BudgetComparison
-              ├── Row 2: BudgetColumns (Income | Needs | Wants | Savings)
-              ├── TargetSettings (collapsible customization panel)
-              └── BudgetManager (collapsible saved budgets panel)
+      └── DesignLanguageProvider
+          ├── / (Dashboard route)
+          │   └── BudgetProvider (budget-context.tsx)
+          │       └── BudgetDashboard (page.tsx)
+          │           ├── Header (ThemeToggle, CommandPaletteButton, Share/Import/Clear actions)
+          │           ├── Row 1: ChartSection | BudgetComparison
+          │           ├── Row 2: BudgetColumns (Income | Needs | Wants | Savings)
+          │           ├── BudgetProjectionCard
+          │           ├── TargetSettings
+          │           ├── BudgetManager
+          │           └── CommandPalette (mounted on dashboard only)
+          └── /onboarding route
+              └── BudgetProvider
+                  └── OnboardingFlow
 ```
 
 #### Key Components
@@ -352,6 +403,21 @@ RootLayout (layout.tsx)
    - List saved budgets with load/rename/delete actions
    - Shows budget summary (income, item counts)
 
+10. **BudgetProjectionCard** (`budget-projection-card.tsx`)
+   - Forecast view for cumulative spending, savings, and projected net worth
+   - Supports itemized/category breakdown and advanced assumptions
+
+11. **CommandPalette** (`command-palette/index.tsx`)
+   - Keyboard-first command center (`Cmd/Ctrl+K`) for budget actions
+   - Includes **theme picker action** and **design language picker action**
+   - Contains nested subviews for add/edit/import/share/rename/switch
+   - Mounted on dashboard route only
+
+12. **OnboardingFlow** (`onboarding/onboarding-flow.tsx`)
+   - Multi-step guided setup with save/replace guards
+   - Shares the same design language system as dashboard
+   - Supports both Delight and Cyberpunk in light/dark modes
+
 ### Serialization System
 
 **Location**: `src/lib/budget-serialization.ts`
@@ -386,17 +452,27 @@ The sharing system uses compression and URL-safe encoding:
 **Location**: `src/app/globals.css`
 
 - **CSS Variables**: OKLCH color space for better color manipulation
-- **Dark Mode**: `.dark` class with blue-tinted cards
+- **Dark Mode**: `.dark` class via `next-themes`
+- **Design Language Overrides**:
+  - `html[data-design-language="delight"]`
+  - `html.dark[data-design-language="delight"]`
+  - Includes Delight grid background, card/button/input/dialog/dropdown slot overrides
 - **Custom Variant**: `@custom-variant dark` for Tailwind
-- **Theme Colors**: Defined in `:root` and `.dark` selectors
+- **Theme Tokens**: Defined in `:root`, `.dark`, and design-language selector blocks
 
-**Color Scheme**:
+**Category Accent Palettes**:
 
-- Needs: `#ef4444` (Red)
-- Wants: `#3b82f6` (Blue)
-- Savings: `#22c55e` (Green)
-- Income: `#8b5cf6` (Purple)
-- Unbudgeted: `#d1d5db` (Gray)
+- **Cyberpunk**:
+  - Needs: `#ef4444`
+  - Wants: `#3b82f6`
+  - Savings: `#22c55e`
+  - Income: `#8b5cf6`
+- **Delight** (pastel accents):
+  - Needs: `#c8887f`
+  - Wants: `#7f9fc8`
+  - Savings: `#79ae90`
+  - Income: `#a893c9`
+- **Unbudgeted** segment uses neutral gray/slate and differs per design language
 
 ### Animation System
 
@@ -424,6 +500,7 @@ The sharing system uses compression and URL-safe encoding:
 **Format**: JSON stringified object containing:
 - `categories`: Items for each category (needs, wants, savings, income)
 - `targetPercentages`: Custom target percentages (if modified from defaults)
+- `currentBudgetName`: Optional current budget display name
 
 **Hydration Strategy**:
 
@@ -432,6 +509,12 @@ The sharing system uses compression and URL-safe encoding:
 3. If data exists, dispatches `LOAD_FROM_STORAGE` action
 4. Subsequent changes auto-save to localStorage
 5. Custom target percentages are persisted and restored
+
+**Design Language Storage Key**: `"budget-planner-design-language"`
+
+- Accepted values: `"delight"` or `"cyberpunk"`
+- Missing/invalid values fallback to default (`"delight"`)
+- Root layout sets `data-design-language` pre-hydration to reduce flash of wrong style
 
 **Saved Budgets Storage Key**: `"budget-planner-saved-budgets"`
 
@@ -454,6 +537,7 @@ The sharing system uses compression and URL-safe encoding:
 ### Typography
 
 - **Primary Font**: Space Grotesk (weights: 400, 500, 600, 700)
+- **Serif Display Font**: Libre Baskerville (weights: 400, 700)
 - **Monospace Font**: JetBrains Mono (weights: 400, 500)
 - **Display**: `swap` for better perceived performance
 
@@ -506,9 +590,10 @@ Look for `transition={{ duration: X }}` in components:
 
 ### Changing Colors
 
-1. Update `CATEGORY_CONFIG` in `src/types/budget.ts`
-2. Update dark mode card colors in `src/app/globals.css` (`.dark` selector)
-3. Ensure contrast ratios meet accessibility standards
+1. For semantic category accents, update mappings in `src/lib/design-language.ts` (`getCategoryColor`, `getItemizedCategoryPalette`)
+2. Keep `CATEGORY_CONFIG` colors for backward compatibility; avoid using them directly for themed UI accents
+3. Update design-language token overrides in `src/app/globals.css` (`html[data-design-language="delight"]`, `html.dark[data-design-language="delight"]`)
+4. Ensure contrast ratios meet accessibility standards in both design languages and light/dark modes
 
 ### Modifying Target Percentages
 
@@ -657,7 +742,7 @@ Currently no automated tests. For adding tests:
 
 **Project Status**: Active Development
 
-**Last Updated**: January 2025
+**Last Updated**: February 2026
 
 ---
 
@@ -669,14 +754,16 @@ When working on this codebase:
 2. **Use Bun** commands, not npm/yarn
 3. **Follow** existing animation patterns (fast for interactive, slower for initial load)
 4. **Memoize** expensive calculations and callbacks
-5. **Test** in both light and dark modes
-6. **Verify** localStorage persistence after changes (including custom targets)
+5. **Test** in both light and dark modes **and** both design languages (Delight/Cyberpunk)
+6. **Verify** localStorage persistence after changes (including custom targets and `budget-planner-design-language`)
 7. **Maintain** TypeScript strict mode compliance
 8. **Use** existing UI components from `src/components/ui/` when possible
 9. **Follow** the established file structure
 10. **Update** this document if adding significant features or changing architecture
 11. **Remember** that target percentages are customizable - don't hardcode 50/30/20
 12. **Use** `getTargetPercentage()` to get current targets, not `CATEGORY_CONFIG`
+13. **For category colors**, use `getCategoryColor(...)` / `getItemizedCategoryPalette(...)` with current design language
+14. **Command palette scope**: keep `Cmd/Ctrl+K` mounted on dashboard route unless intentionally expanded
 
 When making changes:
 
