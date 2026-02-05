@@ -48,6 +48,12 @@
 }
 
 :root {
+  --font-sans: "Space Grotesk", "Space Grotesk Fallback", system-ui, -apple-system,
+    sans-serif;
+  --font-serif: "Libre Baskerville", "Times New Roman", serif;
+  --font-mono: "JetBrains Mono", "JetBrains Mono Fallback", ui-monospace,
+    SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
