@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { BudgetProvider, useBudget } from "@/lib/budget-context";
 import { BudgetColumns } from "@/components/budget-columns";
 import { BudgetPieChart } from "@/components/budget-pie-chart";
@@ -23,10 +24,39 @@ import { CommandPalette } from "@/components/command-palette";
 import { BudgetProjectionCard } from "@/components/budget-projection-card";
 import { Edit2, Check, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { useState, useCallback, useRef, useEffect } from "react";
+import {
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  useSyncExternalStore,
+} from "react";
 import { useDesignLanguage } from "@/lib/design-language-context";
 import { getCategoryColor } from "@/lib/design-language";
 import { cn } from "@/lib/utils";
+
+const STORAGE_KEY = "budget-planner-data";
+const emptySubscribe = () => () => {};
+
+function useIsHydrated() {
+  return useSyncExternalStore(emptySubscribe, () => true, () => false);
+}
+
+function hasStoredBudgetItems() {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) return false;
+
+    const parsed = JSON.parse(stored);
+    return (["income", "needs", "wants", "savings"] as const).some(
+      (category) =>
+        Array.isArray(parsed?.categories?.[category]?.items) &&
+        parsed.categories[category].items.length > 0
+    );
+  } catch {
+    return false;
+  }
+}
 
 function CurrentBudgetName() {
   const { state, setCurrentBudgetName, isHydrated, getTotalIncome } = useBudget();
@@ -612,6 +642,22 @@ function BudgetDashboard() {
 }
 
 export default function Home() {
+  const router = useRouter();
+  const isHydrated = useIsHydrated();
+  const hasShareCode = isHydrated
+    ? new URLSearchParams(window.location.search).has("budget")
+    : false;
+  const hasExistingData = isHydrated ? hasStoredBudgetItems() : false;
+  const shouldRedirectToOnboarding =
+    isHydrated && !hasShareCode && !hasExistingData;
+
+  useEffect(() => {
+    if (!shouldRedirectToOnboarding) return;
+    router.replace("/onboarding");
+  }, [router, shouldRedirectToOnboarding]);
+
+  if (!isHydrated || shouldRedirectToOnboarding) return null;
+
   return (
     <BudgetProvider>
       <CommandPalette />
