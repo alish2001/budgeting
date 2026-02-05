@@ -15,10 +15,10 @@ const CATEGORY_COLORS_BY_LANGUAGE: Record<DesignLanguage, Record<CategoryName, s
     income: "#8b5cf6",
   },
   delight: {
-    needs: "#c8887f",
-    wants: "#7f9fc8",
-    savings: "#79ae90",
-    income: "#a893c9",
+    needs: "#e06c5f",
+    wants: "#4f7fdc",
+    savings: "#2f9f76",
+    income: "#8a63d2",
   },
 };
 
@@ -32,9 +32,9 @@ const ITEMIZED_CATEGORY_PALETTES_BY_LANGUAGE: Record<
     savings: ["#22c55e", "#10b981", "#84cc16", "#16a34a", "#65a30d"],
   },
   delight: {
-    needs: ["#c8887f", "#d29790", "#bc7f79", "#d6a6a0", "#ad756f"],
-    wants: ["#7f9fc8", "#90add2", "#7698c2", "#9fb9dc", "#6f91ba"],
-    savings: ["#79ae90", "#8abca0", "#6fa684", "#9ac8ae", "#659c7b"],
+    needs: ["#e06c5f", "#d9574a", "#eb7b69", "#c94b3f", "#f28e79"],
+    wants: ["#4f7fdc", "#3f6ecf", "#5f8de6", "#355fb8", "#6d9aec"],
+    savings: ["#2f9f76", "#248d68", "#3ab688", "#1f7c5a", "#4cc696"],
   },
 };
 

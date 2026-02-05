@@ -39,21 +39,21 @@ const BREAKDOWN_COLORS_BY_LANGUAGE = {
     "#f43f5e", // Rose
   ],
   delight: [
-    "#c8887f", // Clay rose
-    "#7f9fc8", // Dusty blue
-    "#79ae90", // Sage
-    "#c8aa82", // Sand
-    "#a893c9", // Lilac
-    "#b78aa8", // Mauve
-    "#7eaab4", // Soft teal
-    "#9ab883", // Olive
-    "#be9378", // Terracotta
-    "#8da2c0", // Powder indigo
-    "#76a79d", // Seafoam
-    "#a989b9", // Pastel violet
-    "#b9af7e", // Mustard mist
-    "#7ba994", // Muted emerald
-    "#b78590", // Rosewood
+    "#e06c5f", // Coral
+    "#4f7fdc", // Azure
+    "#2f9f76", // Emerald
+    "#d49a41", // Amber
+    "#8a63d2", // Violet
+    "#cc5f9a", // Magenta
+    "#2d9bb2", // Teal
+    "#7ea13a", // Olive
+    "#d47052", // Terracotta
+    "#5c76c6", // Indigo
+    "#2f998f", // Sea green
+    "#9b5fc9", // Purple
+    "#b88d2f", // Goldenrod
+    "#2ca274", // Mint
+    "#c85c74", // Rose
   ],
 } as const;
 

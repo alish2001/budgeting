@@ -57,6 +57,19 @@ interface ItemSeriesMeta {
   color: string;
 }
 
+interface ProjectionTooltipEntry {
+  dataKey?: string | number;
+  name?: string | number;
+  color?: string;
+  value?: number | string | Array<number | string>;
+}
+
+interface ProjectionTooltipProps {
+  active?: boolean;
+  payload?: readonly ProjectionTooltipEntry[];
+  label?: string | number;
+}
+
 const HORIZON_PRESETS = [1, 3, 6, 12, 24];
 
 function roundCurrency(value: number): number {
@@ -270,6 +283,82 @@ export function BudgetProjectionCard() {
   const projectionNetCashflow = Number(projectionEnd?.netCashflowPerPeriod || 0);
   const projectionNetWorth = Number(projectionEnd?.netWorthProjection || 0);
 
+  const formatProjectionTooltipLabel = (label: string | number | undefined) => {
+    const value = String(label ?? "");
+    return !useYearAxis
+      ? `Month ${value.replace("M", "")}`
+      : `Year ${value.replace("Y", "")}`;
+  };
+
+  const renderProjectionTooltip = ({ active, payload, label }: ProjectionTooltipProps) => {
+    if (!active || !payload?.length) return null;
+
+    const rows = payload
+      .map((entry) => {
+        const rawValue = entry.value;
+        const numericValue =
+          typeof rawValue === "number"
+            ? rawValue
+            : Array.isArray(rawValue)
+              ? Number(rawValue[0] || 0)
+              : Number(rawValue || 0);
+
+        const key =
+          typeof entry.dataKey === "string"
+            ? entry.dataKey
+            : typeof entry.name === "string"
+              ? entry.name
+              : "";
+
+        return {
+          key,
+          label: seriesLabelLookup[key] || key,
+          value: numericValue,
+          color: entry.color || "var(--muted-foreground)",
+        };
+      })
+      .filter((row) => row.label);
+
+    if (!rows.length) return null;
+
+    return (
+      <div className="min-w-56 max-w-[22rem] rounded-xl border border-border/80 bg-card/95 px-3 py-2.5 shadow-xl shadow-black/10 backdrop-blur-sm supports-[backdrop-filter]:bg-card/80">
+        <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+          {formatProjectionTooltipLabel(label)}
+        </p>
+        <div className="max-h-64 space-y-1.5 overflow-y-auto pr-1">
+          {rows.map((row) => {
+            const isNetWorth = row.label === "Projected Net Worth";
+            return (
+              <div
+                key={row.key}
+                className={`flex items-center gap-2 text-sm ${
+                  isNetWorth ? "mt-2 border-t border-border/70 pt-2" : ""
+                }`}
+              >
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: row.color }}
+                  aria-hidden="true"
+                />
+                <span className="min-w-0 flex-1 truncate text-foreground/85">
+                  {row.label}
+                </span>
+                <span
+                  className={`ml-auto shrink-0 font-medium tabular-nums ${
+                    isNetWorth ? "text-foreground" : "text-foreground/85"
+                  }`}
+                >
+                  {formatCurrency(row.value)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   const setInvertedCornerTargets = (x: number, y: number) => {
     const closeTL = (1 - x) * (1 - y);
     const closeTR = x * (1 - y);
@@ -459,23 +548,12 @@ export function BudgetProjectionCard() {
                           tickFormatter={(value: number) => formatCurrency(value)}
                         />
                         <Tooltip
-                          formatter={(value, name) => {
-                            const numericValue =
-                              typeof value === "number"
-                                ? value
-                                : Array.isArray(value)
-                                  ? Number(value[0] || 0)
-                                  : Number(value || 0);
-
-                            const key = typeof name === "string" ? name : "";
-                            return [formatCurrency(numericValue), seriesLabelLookup[key] || key];
+                          content={renderProjectionTooltip}
+                          cursor={{
+                            stroke: "var(--border)",
+                            strokeWidth: 1.25,
+                            strokeDasharray: "4 4",
                           }}
-                          labelFormatter={(label: string) =>
-                            !useYearAxis
-                              ? `Month ${label.replace("M", "")}`
-                              : `Year ${label.replace("Y", "")}`
-                          }
-                          contentStyle={{ borderRadius: 10 }}
                         />
 
                         {series.map((entry) => {
