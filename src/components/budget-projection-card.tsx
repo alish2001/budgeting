@@ -96,6 +96,7 @@ export function BudgetProjectionCard() {
   const [hoveredSeries, setHoveredSeries] = useState<string | null>(null);
   const [assumptionMode, setAssumptionMode] = useState<AssumptionMode>("monthly");
   const [breakdownMode, setBreakdownMode] = useState<BreakdownMode>("itemized");
+  const [showNetWorth, setShowNetWorth] = useState(true);
   const [projectionMonths, setProjectionMonths] = useState(12);
   const [annualInterestRate, setAnnualInterestRate] = useState(4);
   const [currentNetWorth, setCurrentNetWorth] = useState(0);
@@ -231,21 +232,9 @@ export function BudgetProjectionCard() {
           kind: "area",
         },
         {
-          dataKey: "savingsContribution",
-          label: "Savings (No Interest)",
-          color: getCategoryColor("savings", designLanguage),
-          kind: "lineDashed",
-        },
-        {
           dataKey: "savingsWithInterest",
           label: "Savings (With Interest)",
           color: getCategoryColor("savings", designLanguage),
-          kind: "line",
-        },
-        {
-          dataKey: "netWorthProjection",
-          label: "Projected Net Worth (Incl. Current)",
-          color: "#64748b",
           kind: "line",
         },
       ];
@@ -269,20 +258,26 @@ export function BudgetProjectionCard() {
       color: getCategoryColor("savings", designLanguage),
       kind: "line",
     });
-    itemized.push({
-      dataKey: "netWorthProjection",
-      label: "Projected Net Worth (Incl. Current)",
-      color: "#64748b",
-      kind: "line",
-    });
-
     return itemized;
   }, [breakdownMode, designLanguage, itemSeries]);
 
+  const seriesWithNetWorth = useMemo<SeriesConfig[]>(() => {
+    if (!showNetWorth) return series;
+    return [
+      ...series,
+      {
+        dataKey: "netWorthProjection",
+        label: "Projected Net Worth",
+        color: "#64748b",
+        kind: "line",
+      },
+    ];
+  }, [series, showNetWorth]);
+
   const seriesLabelLookup = useMemo(() => {
-    const entries = series.map((entry) => [entry.dataKey, entry.label]);
+    const entries = seriesWithNetWorth.map((entry) => [entry.dataKey, entry.label]);
     return Object.fromEntries(entries) as Record<string, string>;
-  }, [series]);
+  }, [seriesWithNetWorth]);
 
   const projectionNetCashflow = Number(projectionEnd?.netCashflowPerPeriod || 0);
   const projectionNetWorth = Number(projectionEnd?.netWorthProjection || 0);
@@ -561,7 +556,7 @@ export function BudgetProjectionCard() {
                           }}
                         />
 
-                        {series.map((entry) => {
+                        {seriesWithNetWorth.map((entry) => {
                           const isDimmed =
                             hoveredSeries !== null && hoveredSeries !== entry.dataKey;
                           const opacity = isDimmed ? 0.2 : 1;
@@ -745,6 +740,19 @@ export function BudgetProjectionCard() {
                               Projected net worth includes your current net worth, cumulative net
                               cashflow, and savings with interest.
                             </p>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <input
+                                id="show-net-worth"
+                                name="showNetWorth"
+                                type="checkbox"
+                                checked={showNetWorth}
+                                onChange={(event) => setShowNetWorth(event.target.checked)}
+                                className="h-4 w-4 rounded border border-input text-sky-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                              />
+                              <Label htmlFor="show-net-worth" className="text-sm">
+                                Show projected net worth on chart
+                              </Label>
+                            </div>
                           </div>
                         </motion.div>
                       )}
@@ -754,7 +762,7 @@ export function BudgetProjectionCard() {
                   <div className="rounded-lg border border-border/70 p-3">
                     <p className="text-xs text-muted-foreground mb-2">Visible Series</p>
                     <div className="flex flex-wrap gap-2">
-                      {series.map((entry) => (
+                      {seriesWithNetWorth.map((entry) => (
                         <div
                           key={entry.dataKey}
                           className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2 py-1 text-xs transition-all duration-150 ${
@@ -846,9 +854,7 @@ export function BudgetProjectionCard() {
                         </p>
                       </div>
                       <div className="rounded-lg border border-border/70 p-3">
-                        <p className="text-muted-foreground">
-                          Projected Net Worth (Incl. Current)
-                        </p>
+                        <p className="text-muted-foreground">Projected Net Worth</p>
                         <p className="font-semibold text-slate-700 dark:text-slate-300">
                           {formatCurrency(projectionNetWorth)}
                         </p>

@@ -1,9 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import {
-  Space_Grotesk,
-  JetBrains_Mono,
-  Libre_Baskerville,
-} from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -14,26 +9,7 @@ import {
 } from "@/lib/design-language";
 import "./globals.css";
 
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-sans",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  display: "swap",
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  variable: "--font-mono",
-  subsets: ["latin"],
-  weight: ["400", "500"],
-  display: "swap",
-});
-
-const libreBaskerville = Libre_Baskerville({
-  variable: "--font-serif",
-  subsets: ["latin"],
-  weight: ["400", "700"],
-  display: "swap",
-});
+/* eslint-disable @next/next/no-page-custom-font */
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -119,11 +95,23 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap"
+        />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&display=swap"
+        />
         <script dangerouslySetInnerHTML={{ __html: designLanguageInitScript }} />
       </head>
-      <body
-        className={`${spaceGrotesk.variable} ${jetbrainsMono.variable} ${libreBaskerville.variable} font-sans antialiased`}
-      >
+      <body className="font-sans antialiased">
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
