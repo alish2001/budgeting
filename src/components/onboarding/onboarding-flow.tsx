@@ -140,6 +140,8 @@ function CategoryStep({
     targetPercentage !== undefined && totalIncome > 0
       ? (total / totalIncome) * 100
       : null;
+  const targetHitPercentage =
+    targetAmount && targetAmount > 0 ? (total / targetAmount) * 100 : null;
 
   useEffect(() => {
     const isDesktop =
@@ -411,6 +413,49 @@ function CategoryStep({
               </ul>
             )}
           </div>
+
+          {targetHitPercentage !== null ? (
+            <div className="mt-5 rounded-xl border border-border/70 bg-card px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[11px] tracking-[0.22em] uppercase text-foreground/60">
+                  Target hit
+                </p>
+                <p className="font-mono tabular-nums text-sm text-foreground/70">
+                  {targetHitPercentage.toFixed(1)}%
+                </p>
+              </div>
+              <p className="mt-1 text-xs text-foreground/55">
+                {formatCurrency(total)} of{" "}
+                {formatCurrency(targetAmount ?? 0)} target
+              </p>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="sm:hidden">
+          <div className="rounded-2xl border border-border/70 bg-card p-4">
+            <div className="flex flex-col gap-2">
+              <Button onClick={onNext}>
+                Continue
+                <ArrowRight className="size-4" aria-hidden />
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={onSkip}
+                className="text-foreground hover:bg-accent"
+              >
+                Skip for now
+              </Button>
+              <Button
+                variant="outline"
+                onClick={onBack}
+                className="border-border"
+              >
+                <ArrowLeft className="size-4" aria-hidden />
+                Back
+              </Button>
+            </div>
+          </div>
         </div>
 
         <aside className="rounded-2xl border border-border/70 bg-card p-5 sm:p-6">
@@ -495,7 +540,7 @@ function CategoryStep({
         </aside>
       </div>
 
-      <footer className="mt-8 flex flex-col-reverse items-stretch justify-between gap-3 sm:flex-row sm:items-center">
+      <footer className="mt-8 hidden items-stretch justify-between gap-3 sm:flex sm:flex-row sm:items-center">
         <Button variant="outline" onClick={onBack} className="border-border">
           <ArrowLeft className="size-4" aria-hidden />
           Back
