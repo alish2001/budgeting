@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useBudget } from "@/lib/budget-context";
+import { setSkippedOnboarding } from "@/lib/onboarding-gate";
 import { cn, formatCurrency } from "@/lib/utils";
 import { useDesignLanguage } from "@/lib/design-language-context";
 import type { CategoryName, SerializedBudget, SpendingCategoryName } from "@/types/budget";
@@ -836,13 +837,22 @@ export function OnboardingFlow() {
     [shouldReduceMotion]
   );
 
+  const markOnboardingSkipped = useCallback(() => {
+    setSkippedOnboarding(true);
+  }, []);
+
+  const skipToDashboard = useCallback(() => {
+    markOnboardingSkipped();
+    router.push("/");
+  }, [markOnboardingSkipped, router]);
+
   const handleExit = useCallback(() => {
     if (isDirty) {
       setConfirmExitOpen(true);
       return;
     }
-    router.push("/");
-  }, [isDirty, router]);
+    skipToDashboard();
+  }, [isDirty, skipToDashboard]);
 
   const applyDraftToBudget = useCallback(() => {
     const payload: SerializedBudget = {
@@ -1048,12 +1058,10 @@ export function OnboardingFlow() {
                 </div>
 
                 <footer className="mt-10 flex flex-col-reverse items-stretch justify-between gap-3 sm:flex-row sm:items-center">
-                  <Button
-                    asChild
-                    variant="outline"
-                    className="border-border"
-                  >
-                    <Link href="/">Skip and use dashboard</Link>
+                  <Button asChild variant="outline" className="border-border">
+                    <Link href="/" onClick={markOnboardingSkipped}>
+                      Skip and use dashboard
+                    </Link>
                   </Button>
                   <Button onClick={() => goToStep("income")}>
                     Begin setup
@@ -1138,7 +1146,7 @@ export function OnboardingFlow() {
                 variant="destructive"
                 onClick={() => {
                   setConfirmExitOpen(false);
-                  router.push("/");
+                  skipToDashboard();
                 }}
               >
                 Discard and exit

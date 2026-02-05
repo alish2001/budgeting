@@ -33,6 +33,7 @@ import {
 } from "react";
 import { useDesignLanguage } from "@/lib/design-language-context";
 import { getCategoryColor } from "@/lib/design-language";
+import { hasSkippedOnboarding } from "@/lib/onboarding-gate";
 import { cn } from "@/lib/utils";
 
 const STORAGE_KEY = "budget-planner-data";
@@ -648,8 +649,9 @@ export default function Home() {
     ? new URLSearchParams(window.location.search).has("budget")
     : false;
   const hasExistingData = isHydrated ? hasStoredBudgetItems() : false;
+  const skippedOnboarding = isHydrated ? hasSkippedOnboarding() : false;
   const shouldRedirectToOnboarding =
-    isHydrated && !hasShareCode && !hasExistingData;
+    isHydrated && !hasShareCode && !hasExistingData && !skippedOnboarding;
 
   useEffect(() => {
     if (!shouldRedirectToOnboarding) return;
