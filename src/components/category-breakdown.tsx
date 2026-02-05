@@ -8,6 +8,8 @@ import { CATEGORY_CONFIG } from "@/types/budget";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
+import { useDesignLanguage } from "@/lib/design-language-context";
+import { getCategoryColor } from "@/lib/design-language";
 
 interface ItemChartData {
   name: string;
@@ -18,34 +20,53 @@ interface ItemChartData {
 
 // Distinct color palette for category breakdowns
 // These colors are chosen to be visually distinct and work well together
-const BREAKDOWN_COLORS = [
-  "#ef4444", // Red
-  "#3b82f6", // Blue
-  "#22c55e", // Green
-  "#f59e0b", // Amber
-  "#8b5cf6", // Purple
-  "#ec4899", // Pink
-  "#06b6d4", // Cyan
-  "#84cc16", // Lime
-  "#f97316", // Orange
-  "#6366f1", // Indigo
-  "#14b8a6", // Teal
-  "#a855f7", // Violet
-  "#eab308", // Yellow
-  "#10b981", // Emerald
-  "#f43f5e", // Rose
-];
+const BREAKDOWN_COLORS_BY_LANGUAGE = {
+  cyberpunk: [
+    "#ef4444", // Red
+    "#3b82f6", // Blue
+    "#22c55e", // Green
+    "#f59e0b", // Amber
+    "#8b5cf6", // Purple
+    "#ec4899", // Pink
+    "#06b6d4", // Cyan
+    "#84cc16", // Lime
+    "#f97316", // Orange
+    "#6366f1", // Indigo
+    "#14b8a6", // Teal
+    "#a855f7", // Violet
+    "#eab308", // Yellow
+    "#10b981", // Emerald
+    "#f43f5e", // Rose
+  ],
+  delight: [
+    "#c8887f", // Clay rose
+    "#7f9fc8", // Dusty blue
+    "#79ae90", // Sage
+    "#c8aa82", // Sand
+    "#a893c9", // Lilac
+    "#b78aa8", // Mauve
+    "#7eaab4", // Soft teal
+    "#9ab883", // Olive
+    "#be9378", // Terracotta
+    "#8da2c0", // Powder indigo
+    "#76a79d", // Seafoam
+    "#a989b9", // Pastel violet
+    "#b9af7e", // Mustard mist
+    "#7ba994", // Muted emerald
+    "#b78590", // Rosewood
+  ],
+} as const;
 
 // Generate distinct colors for items within a category
 // Uses a diverse color palette instead of shades of the same color
-function generateDistinctColors(count: number): string[] {
+function generateDistinctColors(count: number, palette: readonly string[]): string[] {
   if (count === 0) return [];
 
   const colors: string[] = [];
   for (let i = 0; i < count; i++) {
     // Cycle through the color palette, ensuring good distribution
-    const colorIndex = i % BREAKDOWN_COLORS.length;
-    colors.push(BREAKDOWN_COLORS[colorIndex]);
+    const colorIndex = i % palette.length;
+    colors.push(palette[colorIndex]);
   }
   return colors;
 }
@@ -58,15 +79,22 @@ export function CategoryBreakdown() {
     getTotalIncome,
     getUnbudgetedAmount,
   } = useBudget();
+  const { designLanguage } = useDesignLanguage();
 
   const selectedCategory = state.selectedCategory;
   const isUnbudgeted = selectedCategory === "unbudgeted";
 
   // For unbudgeted, show income sources
   const config = isUnbudgeted
-    ? CATEGORY_CONFIG.income
+    ? {
+        ...CATEGORY_CONFIG.income,
+        color: getCategoryColor("income", designLanguage),
+      }
     : selectedCategory
-    ? CATEGORY_CONFIG[selectedCategory]
+    ? {
+        ...CATEGORY_CONFIG[selectedCategory],
+        color: getCategoryColor(selectedCategory, designLanguage),
+      }
     : null;
 
   // Memoize items to prevent dependency changes on every render
@@ -98,10 +126,10 @@ export function CategoryBreakdown() {
     [items, categoryTotal]
   );
 
-  const colors = useMemo(
-    () => generateDistinctColors(items.length),
-    [items.length]
-  );
+  const colors = useMemo(() => {
+    const palette = BREAKDOWN_COLORS_BY_LANGUAGE[designLanguage];
+    return generateDistinctColors(items.length, palette);
+  }, [designLanguage, items.length]);
 
   if (!selectedCategory || !config) {
     return null;

@@ -11,6 +11,8 @@ import {
 } from "@/types/budget";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
+import { useDesignLanguage } from "@/lib/design-language-context";
+import { getCategoryColor } from "@/lib/design-language";
 
 interface ChartData {
   name: string;
@@ -22,8 +24,6 @@ interface ChartData {
   [key: string]: string | number | boolean | undefined;
 }
 
-const UNBUDGETED_COLOR = "#94a3b8";
-
 export function BudgetPieChart() {
   const {
     getTotalByCategory,
@@ -32,9 +32,11 @@ export function BudgetPieChart() {
     setSelectedCategory,
     getTargetPercentage,
   } = useBudget();
+  const { designLanguage } = useDesignLanguage();
 
   const totalIncome = getTotalIncome();
   const unbudgeted = getUnbudgetedAmount();
+  const unbudgetedColor = designLanguage === "delight" ? "#9aa3ae" : "#94a3b8";
 
   const chartData: ChartData[] = useMemo(() => {
     const segments: ChartData[] = [];
@@ -47,7 +49,7 @@ export function BudgetPieChart() {
           segments.push({
             name: CATEGORY_CONFIG[category].label,
             value: total,
-            color: CATEGORY_CONFIG[category].color,
+            color: getCategoryColor(category, designLanguage),
             category,
             percentage: totalIncome > 0 ? (total / totalIncome) * 100 : 0,
             isUnbudgeted: false,
@@ -61,7 +63,7 @@ export function BudgetPieChart() {
       segments.push({
         name: "Unbudgeted Income",
         value: Math.max(unbudgeted, 0),
-        color: UNBUDGETED_COLOR,
+        color: unbudgetedColor,
         category: "income" as CategoryName,
         percentage:
           totalIncome > 0 ? (Math.max(unbudgeted, 0) / totalIncome) * 100 : 100,
@@ -70,7 +72,7 @@ export function BudgetPieChart() {
     }
 
     return segments;
-  }, [getTotalByCategory, totalIncome, unbudgeted]);
+  }, [designLanguage, getTotalByCategory, totalIncome, unbudgeted, unbudgetedColor]);
 
   const handleClick = (data: ChartData) => {
     if (data.isUnbudgeted) {

@@ -6,6 +6,11 @@ import { Plus, ArrowLeft } from "lucide-react";
 import { useBudget } from "@/lib/budget-context";
 import { CategoryName, CATEGORY_CONFIG } from "@/types/budget";
 import { KeyboardShortcut } from "./keyboard-shortcut";
+import { useDesignLanguage } from "@/lib/design-language-context";
+import { getCategoryColor } from "@/lib/design-language";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface AddItemFormProps {
   category: CategoryName;
@@ -19,7 +24,9 @@ export function AddItemForm({ category, onSuccess, onCancel }: AddItemFormProps)
   const [error, setError] = useState<string | null>(null);
   const labelInputRef = useRef<HTMLInputElement>(null);
   const { addItem } = useBudget();
+  const { designLanguage } = useDesignLanguage();
   const config = CATEGORY_CONFIG[category];
+  const categoryColor = getCategoryColor(category, designLanguage);
 
   useEffect(() => {
     labelInputRef.current?.focus();
@@ -62,17 +69,20 @@ export function AddItemForm({ category, onSuccess, onCancel }: AddItemFormProps)
       className="p-4"
     >
       <div className="flex items-center gap-2 mb-4">
-        <button
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
           onClick={onCancel}
-          className="p-1 hover:bg-muted rounded-md transition-colors"
+          className="rounded-md"
           aria-label="Go back"
         >
           <ArrowLeft className="size-4" />
-        </button>
+        </Button>
         <h3 className="font-semibold flex items-center gap-2">
           <span
             className="w-2 h-2 rounded-full"
-            style={{ backgroundColor: config.color }}
+            style={{ backgroundColor: categoryColor }}
           />
           Add {config.label}
         </h3>
@@ -86,10 +96,10 @@ export function AddItemForm({ category, onSuccess, onCancel }: AddItemFormProps)
           transition={{ delay: 0.05 }}
           className="space-y-1.5"
         >
-          <label htmlFor="cmd-label" className="text-xs font-medium text-muted-foreground">
+          <Label htmlFor="cmd-label" className="text-xs text-muted-foreground">
             Label
-          </label>
-          <input
+          </Label>
+          <Input
             ref={labelInputRef}
             id="cmd-label"
             type="text"
@@ -100,7 +110,7 @@ export function AddItemForm({ category, onSuccess, onCancel }: AddItemFormProps)
             }}
             onKeyDown={handleKeyDown}
             placeholder="e.g., Rent, Groceries…"
-            className="w-full h-9 px-3 text-base rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring/50"
+            className="h-9"
           />
         </motion.div>
 
@@ -110,10 +120,10 @@ export function AddItemForm({ category, onSuccess, onCancel }: AddItemFormProps)
           transition={{ delay: 0.08 }}
           className="space-y-1.5"
         >
-          <label htmlFor="cmd-amount" className="text-xs font-medium text-muted-foreground">
+          <Label htmlFor="cmd-amount" className="text-xs text-muted-foreground">
             Amount ($)
-          </label>
-          <input
+          </Label>
+          <Input
             id="cmd-amount"
             type="number"
             value={amount}
@@ -125,7 +135,7 @@ export function AddItemForm({ category, onSuccess, onCancel }: AddItemFormProps)
             placeholder="0.00"
             min="0"
             step="0.01"
-            className="w-full h-9 px-3 text-base rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring/50"
+            className="h-9"
           />
         </motion.div>
 
@@ -145,13 +155,13 @@ export function AddItemForm({ category, onSuccess, onCancel }: AddItemFormProps)
           transition={{ delay: 0.1 }}
           className="flex items-center justify-between pt-2"
         >
-          <button
+          <Button
             type="submit"
-            className="h-9 px-4 bg-primary text-primary-foreground rounded-md font-medium text-sm hover:opacity-90 transition-opacity flex items-center gap-2"
+            className="h-9 px-4"
           >
             <Plus className="size-4" />
             Add Item
-          </button>
+          </Button>
           <span className="text-xs text-muted-foreground hidden sm:block">
             Press <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px] font-mono">⌘↵</kbd> to save
           </span>

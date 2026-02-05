@@ -24,6 +24,7 @@ import {
   FolderOpen,
   Edit2,
   Sparkles,
+  Check,
 } from "lucide-react";
 import { useBudget } from "@/lib/budget-context";
 import {
@@ -33,6 +34,8 @@ import {
 } from "@/types/budget";
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { useDesignLanguage } from "@/lib/design-language-context";
+import { getCategoryColor } from "@/lib/design-language";
 
 // Types
 import type { PaletteMode } from "./types";
@@ -58,6 +61,7 @@ export function CommandPalette() {
   const [search, setSearch] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const { theme, setTheme } = useTheme();
+  const { designLanguage, setDesignLanguage } = useDesignLanguage();
   const router = useRouter();
   const {
     state,
@@ -176,11 +180,19 @@ export function CommandPalette() {
           setTheme(theme === "dark" ? "light" : "dark");
           closePalette();
           break;
+        case "design-cyberpunk":
+          setDesignLanguage("cyberpunk");
+          closePalette();
+          break;
+        case "design-delight":
+          setDesignLanguage("delight");
+          closePalette();
+          break;
         default:
           break;
       }
     },
-    [theme, setTheme, closePalette, router]
+    [theme, setTheme, closePalette, router, setDesignLanguage]
   );
 
   // Handle item selection for edit
@@ -303,7 +315,7 @@ export function CommandPalette() {
                     onSelect={() => handleSelect("add-income")}
                     className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
                   >
-                    <Wallet className="size-4" style={{ color: CATEGORY_CONFIG.income.color }} />
+                    <Wallet className="size-4" style={{ color: getCategoryColor("income", designLanguage) }} />
                     <span className="flex-1">Add Income</span>
                   </Command.Item>
                   <Command.Item
@@ -311,7 +323,7 @@ export function CommandPalette() {
                     onSelect={() => handleSelect("add-needs")}
                     className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
                   >
-                    <DollarSign className="size-4" style={{ color: CATEGORY_CONFIG.needs.color }} />
+                    <DollarSign className="size-4" style={{ color: getCategoryColor("needs", designLanguage) }} />
                     <span className="flex-1">Add Need</span>
                   </Command.Item>
                   <Command.Item
@@ -319,7 +331,7 @@ export function CommandPalette() {
                     onSelect={() => handleSelect("add-wants")}
                     className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
                   >
-                    <ShoppingBag className="size-4" style={{ color: CATEGORY_CONFIG.wants.color }} />
+                    <ShoppingBag className="size-4" style={{ color: getCategoryColor("wants", designLanguage) }} />
                     <span className="flex-1">Add Want</span>
                   </Command.Item>
                   <Command.Item
@@ -327,7 +339,7 @@ export function CommandPalette() {
                     onSelect={() => handleSelect("add-savings")}
                     className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
                   >
-                    <PiggyBank className="size-4" style={{ color: CATEGORY_CONFIG.savings.color }} />
+                    <PiggyBank className="size-4" style={{ color: getCategoryColor("savings", designLanguage) }} />
                     <span className="flex-1">Add Saving</span>
                   </Command.Item>
                 </Command.Group>
@@ -413,6 +425,32 @@ export function CommandPalette() {
 
                 {/* Actions */}
                 <Command.Group heading="Actions" className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                  <Command.Item
+                    value="Use Cyberpunk Design"
+                    onSelect={() => handleSelect("design-cyberpunk")}
+                    className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
+                  >
+                    <Sparkles className="size-4" />
+                    <span className="flex-1">
+                      Use Cyberpunk Design
+                    </span>
+                    {designLanguage === "cyberpunk" && (
+                      <Check className="size-4 text-muted-foreground" />
+                    )}
+                  </Command.Item>
+                  <Command.Item
+                    value="Use Delight Design"
+                    onSelect={() => handleSelect("design-delight")}
+                    className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
+                  >
+                    <Sparkles className="size-4" />
+                    <span className="flex-1">
+                      Use Delight Design
+                    </span>
+                    {designLanguage === "delight" && (
+                      <Check className="size-4 text-muted-foreground" />
+                    )}
+                  </Command.Item>
                   <Command.Item
                     value="Toggle Theme"
                     onSelect={() => handleSelect("toggle-theme")}
@@ -528,7 +566,10 @@ export function CommandPalette() {
                           onSelect={() => handleEditItem(category, item)}
                           className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
                         >
-                          <Icon className="size-4" style={{ color: config.color }} />
+                          <Icon
+                            className="size-4"
+                            style={{ color: getCategoryColor(category, designLanguage) }}
+                          />
                           <span className="flex-1 truncate">{item.label}</span>
                           <span className="text-sm text-muted-foreground font-mono">
                             {formatCurrency(item.amount)}
@@ -611,7 +652,10 @@ export function CommandPalette() {
                           onSelect={() => handleRemoveItem(category, item.id)}
                           className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-destructive/10 aria-selected:text-destructive"
                         >
-                          <Icon className="size-4" style={{ color: config.color }} />
+                          <Icon
+                            className="size-4"
+                            style={{ color: getCategoryColor(category, designLanguage) }}
+                          />
                           <span className="flex-1 truncate">{item.label}</span>
                           <span className="text-sm text-muted-foreground font-mono">
                             {formatCurrency(item.amount)}

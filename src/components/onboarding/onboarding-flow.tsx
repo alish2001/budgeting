@@ -18,6 +18,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { useBudget } from "@/lib/budget-context";
 import { cn, formatCurrency } from "@/lib/utils";
+import { useDesignLanguage } from "@/lib/design-language-context";
 import type { CategoryName, SerializedBudget, SpendingCategoryName } from "@/types/budget";
 
 type StepId = "welcome" | CategoryName | "review";
@@ -239,10 +240,10 @@ function CategoryStep({
       <header className="flex items-start justify-between gap-6">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="inline-flex size-8 items-center justify-center rounded-full border border-black/15">
+            <span className="inline-flex size-8 items-center justify-center rounded-full border border-border/80">
               <CategoryIcon category={category} className="size-4" />
             </span>
-            <p className="text-[11px] tracking-[0.22em] uppercase text-black/70">
+            <p className="text-[11px] tracking-[0.22em] uppercase text-foreground/70">
               {STEP_LABELS[category]}
             </p>
           </div>
@@ -255,13 +256,13 @@ function CategoryStep({
               ? "What are your wants?"
               : "What will you save?"}
           </h2>
-          <p className="mt-3 max-w-2xl text-black/70">
+          <p className="mt-3 max-w-2xl text-foreground/70">
             {getCategoryDescription(category)}
           </p>
         </div>
 
         <div className="hidden sm:block text-right">
-          <p className="text-[11px] tracking-[0.22em] uppercase text-black/50">
+          <p className="text-[11px] tracking-[0.22em] uppercase text-foreground/50">
             Total
           </p>
           <p className="mt-1 font-mono tabular-nums text-lg">
@@ -271,13 +272,13 @@ function CategoryStep({
       </header>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        <div className="rounded-2xl border border-black/10 bg-white p-5 sm:p-6">
+        <div className="rounded-2xl border border-border/70 bg-card p-5 sm:p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-2">
                 <label
                   htmlFor={`${category}-label`}
-                  className="text-[11px] tracking-[0.22em] uppercase text-black/60"
+                  className="text-[11px] tracking-[0.22em] uppercase text-foreground/60"
                 >
                   Label
                 </label>
@@ -296,14 +297,14 @@ function CategoryStep({
                       ? "Eating out…"
                       : "Emergency fund…"
                   }
-                  className="border-black/15 bg-white text-black placeholder:text-black/40"
+                  className="border-border/80 bg-card text-foreground placeholder:text-foreground/40"
                   autoComplete="off"
                 />
               </div>
               <div className="space-y-2">
                 <label
                   htmlFor={`${category}-amount`}
-                  className="text-[11px] tracking-[0.22em] uppercase text-black/60"
+                  className="text-[11px] tracking-[0.22em] uppercase text-foreground/60"
                 >
                   Amount
                 </label>
@@ -314,7 +315,7 @@ function CategoryStep({
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   placeholder="$0.00…"
-                  className="border-black/15 bg-white font-mono tabular-nums text-black placeholder:text-black/40"
+                  className="border-border/80 bg-card font-mono tabular-nums text-foreground placeholder:text-foreground/40"
                   inputMode="decimal"
                   type="number"
                   step="0.01"
@@ -334,7 +335,7 @@ function CategoryStep({
                     type="button"
                     variant="ghost"
                     onClick={resetForm}
-                    className="text-black hover:bg-black/5"
+                    className="text-foreground hover:bg-accent"
                   >
                     Cancel
                   </Button>
@@ -342,7 +343,7 @@ function CategoryStep({
               </div>
 
               <div className="sm:hidden text-left">
-                <p className="text-[11px] tracking-[0.22em] uppercase text-black/50">
+                <p className="text-[11px] tracking-[0.22em] uppercase text-foreground/50">
                   Total
                 </p>
                 <p className="mt-1 font-mono tabular-nums text-base">
@@ -360,7 +361,7 @@ function CategoryStep({
 
           <div className="mt-6">
             {items.length === 0 ? (
-              <p className="text-sm text-black/60">
+              <p className="text-sm text-foreground/60">
                 No items yet. Add one above — you can keep going and refine
                 later.
               </p>
@@ -376,8 +377,8 @@ function CategoryStep({
                       exit={{ opacity: 0, y: -6 }}
                       transition={{ duration: shouldReduceMotion ? 0 : 0.15 }}
                       className={cn(
-                        "flex items-center justify-between gap-3 rounded-xl border border-black/10 bg-white px-3 py-2",
-                        editingId === item.id && "border-black/25"
+                        "flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-card px-3 py-2",
+                        editingId === item.id && "border-border"
                       )}
                     >
                       <button
@@ -387,7 +388,7 @@ function CategoryStep({
                       >
                         <div className="flex items-center justify-between gap-4">
                           <span className="truncate">{item.label}</span>
-                          <span className="shrink-0 font-mono tabular-nums text-black/70">
+                          <span className="shrink-0 font-mono tabular-nums text-foreground/70">
                             {formatCurrency(item.amount)}
                           </span>
                         </div>
@@ -397,7 +398,7 @@ function CategoryStep({
                         variant="ghost"
                         size="icon-sm"
                         onClick={() => handleRemove(item.id)}
-                        className="text-black/70 hover:bg-black/5 hover:text-black"
+                        className="text-foreground/70 hover:bg-accent hover:text-foreground"
                         aria-label={`Remove ${item.label}`}
                       >
                         <span aria-hidden className="text-lg leading-none">
@@ -412,11 +413,11 @@ function CategoryStep({
           </div>
         </div>
 
-        <aside className="rounded-2xl border border-black/10 bg-white p-5 sm:p-6">
-          <p className="text-[11px] tracking-[0.22em] uppercase text-black/60">
+        <aside className="rounded-2xl border border-border/70 bg-card p-5 sm:p-6">
+          <p className="text-[11px] tracking-[0.22em] uppercase text-foreground/60">
             The rule
           </p>
-          <div className="mt-3 space-y-3 text-black/80">
+          <div className="mt-3 space-y-3 text-foreground/80">
             <p className="text-sm">
               Oversight starts with a calm default:{" "}
               <span className="font-semibold">50 / 30 / 20</span>.
@@ -437,19 +438,19 @@ function CategoryStep({
             </div>
           </div>
 
-          <div className="mt-5 border-t border-black/10 pt-5">
+          <div className="mt-5 border-t border-border/70 pt-5">
             {targetPercentage === undefined ? (
-              <p className="text-sm text-black/60">
+              <p className="text-sm text-foreground/60">
                 Add income first — it makes targets feel tangible.
               </p>
             ) : totalIncome === 0 ? (
-              <p className="text-sm text-black/60">
+              <p className="text-sm text-foreground/60">
                 Add income to see your recommended {targetPercentage}% range.
               </p>
             ) : (
               <div className="space-y-3">
                 <div>
-                  <p className="text-[11px] tracking-[0.22em] uppercase text-black/60">
+                  <p className="text-[11px] tracking-[0.22em] uppercase text-foreground/60">
                     Target ({targetPercentage}%)
                   </p>
                   <p className="mt-1 font-mono tabular-nums text-lg">
@@ -457,7 +458,7 @@ function CategoryStep({
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm text-black/70">
+                  <div className="flex items-center justify-between text-sm text-foreground/70">
                     <span>
                       Current:{" "}
                       <span className="font-mono tabular-nums">
@@ -468,7 +469,7 @@ function CategoryStep({
                       {actualPercentage ? actualPercentage.toFixed(1) : "0.0"}%
                     </span>
                   </div>
-                  <div className="h-2 rounded-full bg-black/10">
+                  <div className="h-2 rounded-full bg-foreground/10">
                     <motion.div
                       initial={{ width: 0 }}
                       animate={{
@@ -481,10 +482,10 @@ function CategoryStep({
                         duration: shouldReduceMotion ? 0 : 0.45,
                         ease: "easeOut",
                       }}
-                      className="h-2 rounded-full bg-black"
+                      className="h-2 rounded-full bg-foreground"
                     />
                   </div>
-                  <p className="text-xs text-black/55">
+                  <p className="text-xs text-foreground/55">
                     A starting point — tune targets anytime in settings.
                   </p>
                 </div>
@@ -495,7 +496,7 @@ function CategoryStep({
       </div>
 
       <footer className="mt-8 flex flex-col-reverse items-stretch justify-between gap-3 sm:flex-row sm:items-center">
-        <Button variant="outline" onClick={onBack} className="border-black/20">
+        <Button variant="outline" onClick={onBack} className="border-border">
           <ArrowLeft className="size-4" aria-hidden />
           Back
         </Button>
@@ -503,7 +504,7 @@ function CategoryStep({
           <Button
             variant="ghost"
             onClick={onSkip}
-            className="text-black hover:bg-black/5"
+            className="text-foreground hover:bg-accent"
           >
             Skip for now
           </Button>
@@ -587,49 +588,49 @@ function ReviewStep({
       aria-label="Review step"
     >
       <header className="max-w-2xl">
-        <p className="text-[11px] tracking-[0.22em] uppercase text-black/70">
+        <p className="text-[11px] tracking-[0.22em] uppercase text-foreground/70">
           Review
         </p>
         <h2 className="mt-3 text-3xl font-semibold leading-tight">
           Your first draft.
         </h2>
-        <p className="mt-3 text-black/70">
+        <p className="mt-3 text-foreground/70">
           We’ll import this into your dashboard. You can adjust anything later.
         </p>
       </header>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_0.9fr]">
-        <div className="rounded-2xl border border-black/10 bg-white p-5 sm:p-6">
+        <div className="rounded-2xl border border-border/70 bg-card p-5 sm:p-6">
           <div className="grid gap-3 sm:grid-cols-2">
             {breakdown.map((row) => (
               <div
                 key={row.label}
-                className="rounded-xl border border-black/10 bg-white px-4 py-3"
+                className="rounded-xl border border-border/70 bg-card px-4 py-3"
               >
-                <p className="text-[11px] tracking-[0.22em] uppercase text-black/60">
+                <p className="text-[11px] tracking-[0.22em] uppercase text-foreground/60">
                   {row.label}
                 </p>
                 <p className="mt-1 font-mono tabular-nums text-lg">
                   {formatCurrency(row.value)}
                 </p>
-                <p className="mt-1 text-sm text-black/55">{row.note}</p>
+                <p className="mt-1 text-sm text-foreground/55">{row.note}</p>
               </div>
             ))}
           </div>
 
-          <div className="mt-4 rounded-xl border border-black/10 bg-white px-4 py-3">
-            <p className="text-[11px] tracking-[0.22em] uppercase text-black/60">
+          <div className="mt-4 rounded-xl border border-border/70 bg-card px-4 py-3">
+            <p className="text-[11px] tracking-[0.22em] uppercase text-foreground/60">
               Unbudgeted
             </p>
             <p
               className={cn(
                 "mt-1 font-mono tabular-nums text-lg",
-                totals.unbudgeted < 0 ? "text-red-700" : "text-black"
+                totals.unbudgeted < 0 ? "text-red-700" : "text-foreground"
               )}
             >
               {formatCurrency(totals.unbudgeted)}
             </p>
-            <p className="mt-1 text-sm text-black/55">
+            <p className="mt-1 text-sm text-foreground/55">
               {totals.unbudgeted < 0
                 ? "You’re budgeting more than your income. That’s okay — adjust later."
                 : "This becomes your buffer — or you can assign it to a category."}
@@ -637,18 +638,18 @@ function ReviewStep({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-black/10 bg-white p-5 sm:p-6">
-          <p className="text-[11px] tracking-[0.22em] uppercase text-black/60">
+        <div className="rounded-2xl border border-border/70 bg-card p-5 sm:p-6">
+          <p className="text-[11px] tracking-[0.22em] uppercase text-foreground/60">
             Optional
           </p>
           <h3 className="mt-3 text-xl font-semibold">Name this budget.</h3>
-          <p className="mt-2 text-sm text-black/70">
+          <p className="mt-2 text-sm text-foreground/70">
             Helpful if you save multiple versions over time.
           </p>
           <div className="mt-4 space-y-2">
             <label
               htmlFor="budget-name"
-              className="text-[11px] tracking-[0.22em] uppercase text-black/60"
+              className="text-[11px] tracking-[0.22em] uppercase text-foreground/60"
             >
               Budget name
             </label>
@@ -658,16 +659,16 @@ function ReviewStep({
               value={budgetName}
               onChange={(e) => onBudgetNameChange(e.target.value)}
               placeholder="February overview…"
-              className="border-black/15 bg-white text-black placeholder:text-black/40"
+              className="border-border/80 bg-card text-foreground placeholder:text-foreground/40"
               autoComplete="off"
             />
           </div>
 
-          <div className="mt-6 rounded-xl border border-black/10 bg-white px-4 py-3">
-            <p className="text-[11px] tracking-[0.22em] uppercase text-black/60">
+          <div className="mt-6 rounded-xl border border-border/70 bg-card px-4 py-3">
+            <p className="text-[11px] tracking-[0.22em] uppercase text-foreground/60">
               Why 50 / 30 / 20?
             </p>
-            <p className="mt-2 text-sm text-black/70">
+            <p className="mt-2 text-sm text-foreground/70">
               It’s a gentle default that balances stability (needs), joy (wants),
               and resilience (savings). Treat it as a starting line — not a rule
               you must obey.
@@ -677,7 +678,7 @@ function ReviewStep({
       </div>
 
       <footer className="mt-8 flex flex-col-reverse items-stretch justify-between gap-3 sm:flex-row sm:items-center">
-        <Button variant="outline" onClick={onBack} className="border-black/20">
+        <Button variant="outline" onClick={onBack} className="border-border">
           <ArrowLeft className="size-4" aria-hidden />
           Back
         </Button>
@@ -693,7 +694,9 @@ function ReviewStep({
 export function OnboardingFlow() {
   const router = useRouter();
   const shouldReduceMotion = useReducedMotion();
+  const { designLanguage } = useDesignLanguage();
   const { state, importBudget, isHydrated, setCurrentBudgetName } = useBudget();
+  const isDelight = designLanguage === "delight";
 
   const [step, setStep] = useState<StepId>("welcome");
   const [draft, setDraft] = useState<DraftItemsByCategory>(() => ({
@@ -831,19 +834,26 @@ export function OnboardingFlow() {
   if (!isHydrated) return null;
 
   return (
-    <div className="relative min-h-[100svh] bg-white text-black" style={{ colorScheme: "light" }}>
+    <div
+      className={cn(
+        "relative min-h-[100svh] text-foreground",
+        isDelight
+          ? "bg-background delight-grid-background"
+          : "bg-linear-to-br from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950"
+      )}
+    >
       <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.06] [background-image:linear-gradient(to_right,#000_1px,transparent_1px),linear-gradient(to_bottom,#000_1px,transparent_1px)] [background-size:72px_72px]"
-      />
-
-      <div className="relative mx-auto flex min-h-[100svh] max-w-4xl flex-col px-4 py-10 font-serif sm:px-6">
+        className={cn(
+          "relative mx-auto flex min-h-[100svh] flex-col px-4 py-10 sm:px-6",
+          isDelight ? "max-w-4xl font-serif" : "max-w-5xl font-sans"
+        )}
+      >
         <header className="flex items-center justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-[11px] tracking-[0.22em] uppercase text-black/70">
+            <p className={cn("text-[11px] tracking-[0.22em] uppercase", isDelight ? "delight-meta" : "text-foreground/70")}>
               Oversight
             </p>
-            <p className="mt-1 text-sm text-black/60">
+            <p className="mt-1 text-sm text-foreground/60">
               A serene start to your budget.
             </p>
           </div>
@@ -851,19 +861,19 @@ export function OnboardingFlow() {
             type="button"
             variant="ghost"
             onClick={handleExit}
-            className="text-black hover:bg-black/5"
+            className="text-foreground hover:bg-accent"
           >
             Exit
           </Button>
         </header>
 
         <nav className="mt-8" aria-label="Onboarding progress">
-          <div className="relative h-px bg-black/10">
+          <div className="relative h-px bg-foreground/10">
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: `${progress * 100}%` }}
               transition={{ duration: shouldReduceMotion ? 0 : 0.5, ease: "easeOut" }}
-              className="absolute left-0 top-0 h-px bg-black"
+              className="absolute left-0 top-0 h-px bg-foreground"
             />
           </div>
           <ol className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
@@ -879,8 +889,10 @@ export function OnboardingFlow() {
                     onClick={() => goToStep(stepId)}
                     className={cn(
                       "group w-full rounded-lg border px-2 py-2 text-left transition-colors",
-                      "border-black/10 bg-white hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/30",
-                      isCurrent && "border-black/25"
+                      isDelight
+                        ? "border-border/70 bg-card hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                        : "border-border/60 bg-card/90 hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      isCurrent && (isDelight ? "border-border" : "border-primary/40")
                     )}
                     aria-current={isCurrent ? "step" : undefined}
                   >
@@ -889,14 +901,16 @@ export function OnboardingFlow() {
                         className={cn(
                           "inline-flex size-5 items-center justify-center rounded-full border text-[11px] font-mono tabular-nums",
                           isComplete
-                            ? "border-black bg-black text-white"
-                            : "border-black/20 text-black/70"
+                            ? isDelight
+                              ? "border-foreground bg-foreground text-background"
+                              : "border-primary bg-primary text-primary-foreground"
+                            : "border-border text-foreground/70"
                         )}
                         aria-hidden
                       >
                         {isComplete ? <Check className="size-3" /> : index + 1}
                       </span>
-                      <span className="truncate text-[11px] tracking-[0.18em] uppercase text-black/70">
+                      <span className="truncate text-[11px] tracking-[0.18em] uppercase text-foreground/70">
                         {label}
                       </span>
                     </div>
@@ -920,16 +934,16 @@ export function OnboardingFlow() {
                 aria-label="Welcome step"
               >
                 <div className="max-w-2xl">
-                  <p className="text-[11px] tracking-[0.22em] uppercase text-black/70">
+                  <p className="text-[11px] tracking-[0.22em] uppercase text-foreground/70">
                     Welcome
                   </p>
                   <h1 className="mt-3 text-4xl font-semibold leading-tight sm:text-5xl">
                     Welcome to Oversight.
                   </h1>
-                  <p className="mt-5 text-lg text-black/70">
+                  <p className="mt-5 text-lg text-foreground/70">
                     A guided, calm setup that turns your income into a simple
                     plan:{" "}
-                    <span className="font-semibold text-black">
+                    <span className="font-semibold text-foreground">
                       50 / 30 / 20
                     </span>
                     .
@@ -937,31 +951,31 @@ export function OnboardingFlow() {
                 </div>
 
                 <div className="mt-10 grid gap-6 lg:grid-cols-2">
-                  <div className="rounded-2xl border border-black/10 bg-white p-6">
-                    <p className="text-[11px] tracking-[0.22em] uppercase text-black/60">
+                  <div className="rounded-2xl border border-border/70 bg-card p-6">
+                    <p className="text-[11px] tracking-[0.22em] uppercase text-foreground/60">
                       What you’ll do
                     </p>
-                    <ul className="mt-4 space-y-3 text-sm text-black/75">
+                    <ul className="mt-4 space-y-3 text-sm text-foreground/75">
                       <li className="flex gap-3">
-                        <span className="mt-1 size-1.5 shrink-0 rounded-full bg-black/60" />
+                        <span className="mt-1 size-1.5 shrink-0 rounded-full bg-foreground/60" />
                         Add your income (monthly works best).
                       </li>
                       <li className="flex gap-3">
-                        <span className="mt-1 size-1.5 shrink-0 rounded-full bg-black/60" />
+                        <span className="mt-1 size-1.5 shrink-0 rounded-full bg-foreground/60" />
                         List a few Needs and Wants.
                       </li>
                       <li className="flex gap-3">
-                        <span className="mt-1 size-1.5 shrink-0 rounded-full bg-black/60" />
+                        <span className="mt-1 size-1.5 shrink-0 rounded-full bg-foreground/60" />
                         Set a first Savings target — or skip.
                       </li>
                     </ul>
                   </div>
 
-                  <div className="rounded-2xl border border-black/10 bg-white p-6">
-                    <p className="text-[11px] tracking-[0.22em] uppercase text-black/60">
+                  <div className="rounded-2xl border border-border/70 bg-card p-6">
+                    <p className="text-[11px] tracking-[0.22em] uppercase text-foreground/60">
                       Why it works
                     </p>
-                    <p className="mt-4 text-sm text-black/70">
+                    <p className="mt-4 text-sm text-foreground/70">
                       The 50 / 30 / 20 rule is a quick mental model: cover
                       essentials, leave room for joy, and build resilience. It’s
                       intentionally simple — you can customize targets later.
@@ -974,12 +988,12 @@ export function OnboardingFlow() {
                       ] as const).map((pill) => (
                         <div
                           key={pill.label}
-                          className="rounded-xl border border-black/10 bg-white px-3 py-2 text-center"
+                          className="rounded-xl border border-border/70 bg-card px-3 py-2 text-center"
                         >
                           <p className="font-mono tabular-nums text-lg">
                             {pill.value}%
                           </p>
-                          <p className="text-[11px] tracking-[0.18em] uppercase text-black/60">
+                          <p className="text-[11px] tracking-[0.18em] uppercase text-foreground/60">
                             {pill.label}
                           </p>
                         </div>
@@ -992,7 +1006,7 @@ export function OnboardingFlow() {
                   <Button
                     asChild
                     variant="outline"
-                    className="border-black/20"
+                    className="border-border"
                   >
                     <Link href="/">Skip and use dashboard</Link>
                   </Button>

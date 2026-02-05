@@ -13,6 +13,8 @@ import {
   TargetPercentages,
 } from "@/types/budget";
 import { useBudget } from "@/lib/budget-context";
+import { useDesignLanguage } from "@/lib/design-language-context";
+import { getCategoryColor } from "@/lib/design-language";
 import {
   ChevronDown,
   ChevronUp,
@@ -28,6 +30,7 @@ const CATEGORIES: SpendingCategoryName[] = ["needs", "wants", "savings"];
 export function TargetSettings() {
   const { state, updateTargetPercentages, resetTargetPercentages } =
     useBudget();
+  const { designLanguage } = useDesignLanguage();
 
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState<TargetPercentages>(
@@ -188,6 +191,7 @@ export function TargetSettings() {
               <div className="space-y-4">
                 {CATEGORIES.map((category, index) => {
                   const config = CATEGORY_CONFIG[category];
+                  const categoryColor = getCategoryColor(category, designLanguage);
                   const value = draft[category];
                   return (
                     <motion.div
@@ -201,7 +205,7 @@ export function TargetSettings() {
                         <div className="flex items-center gap-2">
                           <span
                             className="h-3 w-3 rounded-full"
-                            style={{ backgroundColor: config.color }}
+                            style={{ backgroundColor: categoryColor }}
                             aria-hidden
                           />
                           <Label className="text-sm font-semibold">
@@ -210,7 +214,7 @@ export function TargetSettings() {
                         </div>
                         <span
                           className="text-sm font-semibold"
-                          style={{ color: config.color }}
+                          style={{ color: categoryColor }}
                         >
                           {value.toFixed(0)}%
                         </span>

@@ -5,6 +5,9 @@ import { motion } from "framer-motion";
 import { Edit2, ArrowLeft, Check } from "lucide-react";
 import { useBudget } from "@/lib/budget-context";
 import { KeyboardShortcut } from "./keyboard-shortcut";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface RenameBudgetViewProps {
   onCancel: () => void;
@@ -55,13 +58,16 @@ export function RenameBudgetView({ onCancel, onSuccess }: RenameBudgetViewProps)
       className="p-4"
     >
       <div className="flex items-center gap-2 mb-4">
-        <button
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
           onClick={onCancel}
-          className="p-1 hover:bg-muted rounded-md transition-colors"
+          className="rounded-md"
           aria-label="Go back"
         >
           <ArrowLeft className="size-4" />
-        </button>
+        </Button>
         <h3 className="font-semibold flex items-center gap-2">
           <Edit2 className="size-4" />
           Rename Current Budget
@@ -79,10 +85,10 @@ export function RenameBudgetView({ onCancel, onSuccess }: RenameBudgetViewProps)
 
       <form onSubmit={handleSubmit} className="space-y-3">
         <div className="space-y-1.5">
-          <label htmlFor="cmd-budget-name" className="text-xs font-medium text-muted-foreground">
+          <Label htmlFor="cmd-budget-name" className="text-xs text-muted-foreground">
             Budget Name
-          </label>
-          <input
+          </Label>
+          <Input
             ref={nameInputRef}
             id="cmd-budget-name"
             type="text"
@@ -90,7 +96,7 @@ export function RenameBudgetView({ onCancel, onSuccess }: RenameBudgetViewProps)
             onChange={(e) => setName(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="e.g., January 2025 Budget"
-            className="w-full h-9 px-3 text-base rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring/50"
+            className="h-9"
             disabled={!hasData}
           />
           <p className="text-xs text-muted-foreground">
@@ -99,14 +105,14 @@ export function RenameBudgetView({ onCancel, onSuccess }: RenameBudgetViewProps)
         </div>
 
         <div className="flex items-center justify-between pt-2">
-          <button
+          <Button
             type="submit"
             disabled={!hasData}
-            className="h-9 px-4 bg-primary text-primary-foreground rounded-md font-medium text-sm hover:opacity-90 transition-opacity flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="h-9 px-4"
           >
             <Check className="size-4" />
             Save Name
-          </button>
+          </Button>
           <span className="text-xs text-muted-foreground hidden sm:block">
             Press <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px] font-mono">⌘↵</kbd> to save
           </span>

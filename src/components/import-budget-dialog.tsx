@@ -15,14 +15,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useBudget } from "@/lib/budget-context";
+import { useDesignLanguage } from "@/lib/design-language-context";
 import {
   decodeBudget,
   getBudgetCodeFromUrl,
   clearBudgetFromUrl,
   getBudgetPreview,
 } from "@/lib/budget-serialization";
-import { CATEGORY_CONFIG } from "@/types/budget";
 import { formatCurrency } from "@/lib/utils";
+import { getCategoryColor } from "@/lib/design-language";
 import {
   Download,
   AlertCircle,
@@ -55,6 +56,7 @@ export function ImportBudgetDialog({
   initialCode = "",
 }: ImportBudgetDialogProps) {
   const { importBudget, isHydrated } = useBudget();
+  const { designLanguage } = useDesignLanguage();
 
   // Read URL code using useSyncExternalStore (runs once on mount, stable reference)
   const urlCode = useSyncExternalStore(
@@ -91,6 +93,10 @@ export function ImportBudgetDialog({
 
   const { preview, error } = validationResult;
   const previewData = preview ? getBudgetPreview(preview) : null;
+  const needsColor = getCategoryColor("needs", designLanguage);
+  const wantsColor = getCategoryColor("wants", designLanguage);
+  const savingsColor = getCategoryColor("savings", designLanguage);
+  const incomeColor = getCategoryColor("income", designLanguage);
 
   const handleImport = () => {
     if (!preview) return;
@@ -276,7 +282,10 @@ export function ImportBudgetDialog({
                       <p className="text-muted-foreground text-xs">
                         Total Income
                       </p>
-                      <p className="font-semibold text-purple-600 dark:text-purple-400">
+                      <p
+                        className="font-semibold"
+                        style={{ color: incomeColor }}
+                      >
                         {formatCurrency(previewData.totalIncome)}
                       </p>
                     </div>
@@ -284,7 +293,7 @@ export function ImportBudgetDialog({
                     <div className="space-y-1">
                       <p
                         className="text-xs"
-                        style={{ color: CATEGORY_CONFIG.needs.color }}
+                        style={{ color: needsColor }}
                       >
                         Needs ({previewData.itemCounts.needs} items)
                       </p>
@@ -296,7 +305,7 @@ export function ImportBudgetDialog({
                     <div className="space-y-1">
                       <p
                         className="text-xs"
-                        style={{ color: CATEGORY_CONFIG.wants.color }}
+                        style={{ color: wantsColor }}
                       >
                         Wants ({previewData.itemCounts.wants} items)
                       </p>
@@ -308,7 +317,7 @@ export function ImportBudgetDialog({
                     <div className="space-y-1">
                       <p
                         className="text-xs"
-                        style={{ color: CATEGORY_CONFIG.savings.color }}
+                        style={{ color: savingsColor }}
                       >
                         Savings ({previewData.itemCounts.savings} items)
                       </p>

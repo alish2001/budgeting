@@ -19,6 +19,11 @@ import {
   getBudgetPreview,
 } from "@/lib/budget-serialization";
 import { KeyboardShortcut } from "./keyboard-shortcut";
+import { useDesignLanguage } from "@/lib/design-language-context";
+import { getCategoryColor } from "@/lib/design-language";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface ImportBudgetViewProps {
   onCancel: () => void;
@@ -27,6 +32,7 @@ interface ImportBudgetViewProps {
 
 export function ImportBudgetView({ onCancel, onSuccess }: ImportBudgetViewProps) {
   const { importBudget } = useBudget();
+  const { designLanguage } = useDesignLanguage();
   // Initialize with URL code if present
   const [code, setCode] = useState(() => {
     if (typeof window !== "undefined") {
@@ -53,6 +59,7 @@ export function ImportBudgetView({ onCancel, onSuccess }: ImportBudgetViewProps)
 
   const { preview, error: validationError } = validationResult;
   const previewData = preview ? getBudgetPreview(preview) : null;
+  const incomeColor = getCategoryColor("income", designLanguage);
 
   const handleImport = () => {
     if (!preview) return;
@@ -89,13 +96,16 @@ export function ImportBudgetView({ onCancel, onSuccess }: ImportBudgetViewProps)
       className="p-4"
     >
       <div className="flex items-center gap-2 mb-4">
-        <button
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
           onClick={onCancel}
-          className="p-1 hover:bg-muted rounded-md transition-colors"
+          className="rounded-md"
           aria-label="Go back"
         >
           <ArrowLeft className="size-4" />
-        </button>
+        </Button>
         <h3 className="font-semibold flex items-center gap-2">
           <Download className="size-4" />
           Import Budget
@@ -105,29 +115,32 @@ export function ImportBudgetView({ onCancel, onSuccess }: ImportBudgetViewProps)
 
       <div className="space-y-3">
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">
+          <Label className="text-xs text-muted-foreground">
             Budget Code
-          </label>
+          </Label>
           <div className="flex gap-2">
-            <input
+            <Input
               type="text"
               value={code}
               onChange={(e) => {
                 setCode(e.target.value);
               }}
               placeholder="Paste your budget code here…"
-              className="flex-1 h-9 px-3 text-xs font-mono rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring/50"
+              className="h-9 text-xs font-mono"
               disabled={isImporting || importSuccess}
               autoFocus
             />
             {!code && (
-              <button
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
                 onClick={handlePasteFromClipboard}
-                className="h-9 w-9 flex items-center justify-center border border-input rounded-md hover:bg-muted transition-colors shrink-0"
+                className="h-9 w-9 shrink-0"
                 aria-label="Paste from clipboard"
               >
                 <ClipboardPaste className="size-4" />
-              </button>
+              </Button>
             )}
           </div>
         </div>
@@ -166,7 +179,10 @@ export function ImportBudgetView({ onCancel, onSuccess }: ImportBudgetViewProps)
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div>
                 <p className="text-muted-foreground">Income</p>
-                <p className="font-semibold text-purple-600 dark:text-purple-400">
+                <p
+                  className="font-semibold"
+                  style={{ color: incomeColor }}
+                >
                   {formatCurrency(previewData.totalIncome)}
                 </p>
               </div>
@@ -184,17 +200,19 @@ export function ImportBudgetView({ onCancel, onSuccess }: ImportBudgetViewProps)
         )}
 
         <div className="flex items-center justify-end gap-2 pt-2">
-          <button
+          <Button
+            type="button"
+            variant="secondary"
             onClick={onCancel}
-            className="h-9 px-4 bg-muted text-foreground rounded-md font-medium text-sm hover:bg-muted/80 transition-colors"
             disabled={isImporting}
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
+            type="button"
             onClick={handleImport}
             disabled={!preview || isImporting || importSuccess}
-            className="h-9 px-4 bg-primary text-primary-foreground rounded-md font-medium text-sm hover:opacity-90 transition-opacity flex items-center gap-2"
+            className="h-9 px-4"
           >
             {isImporting ? (
               <>
@@ -212,7 +230,7 @@ export function ImportBudgetView({ onCancel, onSuccess }: ImportBudgetViewProps)
                 Import
               </>
             )}
-          </button>
+          </Button>
         </div>
       </div>
     </motion.div>

@@ -116,11 +116,170 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+html[data-design-language="delight"] {
+  --background: oklch(0.98 0.003 95.1);
+  --foreground: oklch(0.21 0.006 95.1);
+  --card: oklch(0.995 0.002 95.1);
+  --card-foreground: oklch(0.21 0.006 95.1);
+  --popover: oklch(0.995 0.002 95.1);
+  --popover-foreground: oklch(0.21 0.006 95.1);
+  --primary: oklch(0.19 0.005 95.1);
+  --primary-foreground: oklch(0.995 0.002 95.1);
+  --secondary: oklch(0.965 0.003 95.1);
+  --secondary-foreground: oklch(0.22 0.006 95.1);
+  --muted: oklch(0.965 0.003 95.1);
+  --muted-foreground: oklch(0.5 0.01 95.1);
+  --accent: oklch(0.955 0.003 95.1);
+  --accent-foreground: oklch(0.2 0.006 95.1);
+  --border: oklch(0.885 0.003 95.1);
+  --input: oklch(0.885 0.003 95.1);
+  --ring: oklch(0.62 0.01 95.1);
+  --destructive: oklch(0.61 0.2 26);
+
+  --delight-grid-color: rgba(17, 24, 39, 0.07);
+  --delight-border: rgba(17, 24, 39, 0.14);
+  --delight-border-strong: rgba(17, 24, 39, 0.22);
+  --delight-surface: rgba(255, 255, 255, 0.9);
+  --delight-surface-muted: rgba(17, 24, 39, 0.03);
+  --delight-surface-hover: rgba(17, 24, 39, 0.07);
+  --delight-shadow: 0 1px 0 rgba(17, 24, 39, 0.05),
+    0 8px 24px rgba(17, 24, 39, 0.06);
+}
+
+html.dark[data-design-language="delight"] {
+  --background: oklch(0.17 0.004 95.1);
+  --foreground: oklch(0.96 0.004 95.1);
+  --card: oklch(0.2 0.003 95.1);
+  --card-foreground: oklch(0.96 0.004 95.1);
+  --popover: oklch(0.2 0.003 95.1);
+  --popover-foreground: oklch(0.96 0.004 95.1);
+  --primary: oklch(0.96 0.004 95.1);
+  --primary-foreground: oklch(0.2 0.003 95.1);
+  --secondary: oklch(0.255 0.004 95.1);
+  --secondary-foreground: oklch(0.96 0.004 95.1);
+  --muted: oklch(0.255 0.004 95.1);
+  --muted-foreground: oklch(0.76 0.005 95.1);
+  --accent: oklch(0.285 0.004 95.1);
+  --accent-foreground: oklch(0.98 0.004 95.1);
+  --border: oklch(0.34 0.004 95.1 / 45%);
+  --input: oklch(0.32 0.004 95.1 / 48%);
+  --ring: oklch(0.73 0.008 95.1);
+
+  --delight-grid-color: rgba(241, 245, 249, 0.1);
+  --delight-border: rgba(241, 245, 249, 0.2);
+  --delight-border-strong: rgba(241, 245, 249, 0.32);
+  --delight-surface: rgba(18, 21, 25, 0.86);
+  --delight-surface-muted: rgba(241, 245, 249, 0.04);
+  --delight-surface-hover: rgba(241, 245, 249, 0.09);
+  --delight-shadow: 0 1px 0 rgba(15, 23, 42, 0.5),
+    0 8px 28px rgba(15, 23, 42, 0.35);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  html[data-design-language="delight"] [data-slot="card"] {
+    background: var(--delight-surface);
+    border-color: var(--delight-border);
+    box-shadow: var(--delight-shadow);
+    backdrop-filter: blur(2px);
+  }
+
+  html[data-design-language="delight"] [data-slot="button"] {
+    border-color: var(--delight-border);
+    border-radius: 0.75rem;
+    transition-duration: 150ms;
+  }
+
+  html[data-design-language="delight"] [data-slot="button"][data-variant="default"] {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+
+  html[data-design-language="delight"] [data-slot="button"][data-variant="outline"] {
+    background: var(--delight-surface);
+    color: var(--foreground);
+  }
+
+  html[data-design-language="delight"] [data-slot="button"][data-variant="ghost"] {
+    color: var(--foreground);
+  }
+
+  html[data-design-language="delight"] [data-slot="button"]:hover {
+    background: var(--delight-surface-hover);
+  }
+
+  html[data-design-language="delight"] [data-slot="input"],
+  html[data-design-language="delight"] [data-slot="textarea"] {
+    background: var(--delight-surface);
+    border-color: var(--delight-border);
+  }
+
+  html[data-design-language="delight"] [data-slot="dialog-overlay"] {
+    background: rgba(17, 24, 39, 0.35);
+    backdrop-filter: blur(3px);
+  }
+
+  html.dark[data-design-language="delight"] [data-slot="dialog-overlay"] {
+    background: rgba(2, 6, 23, 0.58);
+  }
+
+  html[data-design-language="delight"] [data-slot="dialog-content"],
+  html[data-design-language="delight"] [data-slot="dropdown-menu-content"] {
+    border-color: var(--delight-border);
+    background: var(--delight-surface);
+    box-shadow: var(--delight-shadow);
+  }
+
+  html[data-design-language="delight"] [data-slot="dropdown-menu-item"]:focus-visible,
+  html[data-design-language="delight"] [data-slot="dropdown-menu-item"][data-highlighted] {
+    background: var(--delight-surface-hover);
+  }
+}
+
+@layer utilities {
+  .delight-grid-background {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .delight-grid-background::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    z-index: -1;
+    background-image: linear-gradient(
+        to right,
+        var(--delight-grid-color) 1px,
+        transparent 1px
+      ),
+      linear-gradient(to bottom, var(--delight-grid-color) 1px, transparent 1px);
+    background-size: 72px 72px;
+    transition: opacity 160ms ease;
+  }
+
+  html[data-design-language="delight"] .delight-grid-background::before {
+    opacity: 1;
+  }
+
+  html[data-design-language="delight"] .delight-serif-display {
+    font-family: var(--font-serif);
+    letter-spacing: -0.015em;
+  }
+
+  html[data-design-language="delight"] .delight-meta {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--muted-foreground);
   }
 }

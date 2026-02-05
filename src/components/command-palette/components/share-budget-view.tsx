@@ -6,6 +6,9 @@ import { Share2, ArrowLeft, Link, Code, Copy, Check } from "lucide-react";
 import { useBudget } from "@/lib/budget-context";
 import { encodeBudget, generateShareUrl } from "@/lib/budget-serialization";
 import { KeyboardShortcut } from "./keyboard-shortcut";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface ShareBudgetViewProps {
   onCancel: () => void;
@@ -54,13 +57,16 @@ export function ShareBudgetView({ onCancel }: ShareBudgetViewProps) {
       className="p-4"
     >
       <div className="flex items-center gap-2 mb-4">
-        <button
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
           onClick={onCancel}
-          className="p-1 hover:bg-muted rounded-md transition-colors"
+          className="rounded-md"
           aria-label="Go back"
         >
           <ArrowLeft className="size-4" />
-        </button>
+        </Button>
         <h3 className="font-semibold flex items-center gap-2">
           <Share2 className="size-4" />
           Share Budget
@@ -71,20 +77,23 @@ export function ShareBudgetView({ onCancel }: ShareBudgetViewProps) {
       <div className="space-y-4">
         {/* Share URL */}
         <div className="space-y-2">
-          <label className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+          <Label className="text-xs text-muted-foreground flex items-center gap-2">
             <Link className="size-3.5" />
             Shareable Link
-          </label>
+          </Label>
           <div className="flex gap-2">
-            <input
+            <Input
               readOnly
               value={shareUrl}
-              className="flex-1 h-9 px-3 text-xs font-mono rounded-md border border-input bg-muted/50 cursor-default"
+              className="h-9 text-xs font-mono bg-muted/50 cursor-default"
               onClick={(e) => e.currentTarget.select()}
             />
-            <button
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
               onClick={handleCopyUrl}
-              className="h-9 w-9 flex items-center justify-center border border-input rounded-md hover:bg-muted transition-colors shrink-0"
+              className="h-9 w-9 shrink-0"
               aria-label={copiedUrl ? "URL copied" : "Copy URL"}
             >
               <AnimatePresence mode="wait">
@@ -110,26 +119,29 @@ export function ShareBudgetView({ onCancel }: ShareBudgetViewProps) {
                   </motion.div>
                 )}
               </AnimatePresence>
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* Share Code */}
         <div className="space-y-2">
-          <label className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+          <Label className="text-xs text-muted-foreground flex items-center gap-2">
             <Code className="size-3.5" />
             Budget Code
-          </label>
+          </Label>
           <div className="flex gap-2">
-            <input
+            <Input
               readOnly
               value={shareCode}
-              className="flex-1 h-9 px-3 text-xs font-mono rounded-md border border-input bg-muted/50 cursor-default"
+              className="h-9 text-xs font-mono bg-muted/50 cursor-default"
               onClick={(e) => e.currentTarget.select()}
             />
-            <button
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
               onClick={handleCopyCode}
-              className="h-9 w-9 flex items-center justify-center border border-input rounded-md hover:bg-muted transition-colors shrink-0"
+              className="h-9 w-9 shrink-0"
               aria-label={copiedCode ? "Code copied" : "Copy code"}
             >
               <AnimatePresence mode="wait">
@@ -155,7 +167,7 @@ export function ShareBudgetView({ onCancel }: ShareBudgetViewProps) {
                   </motion.div>
                 )}
               </AnimatePresence>
-            </button>
+            </Button>
           </div>
         </div>
       </div>

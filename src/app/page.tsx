@@ -24,6 +24,9 @@ import { BudgetProjectionCard } from "@/components/budget-projection-card";
 import { Edit2, Check, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useState, useCallback, useRef, useEffect } from "react";
+import { useDesignLanguage } from "@/lib/design-language-context";
+import { getCategoryColor } from "@/lib/design-language";
+import { cn } from "@/lib/utils";
 
 function CurrentBudgetName() {
   const { state, setCurrentBudgetName, isHydrated, getTotalIncome } = useBudget();
@@ -162,6 +165,8 @@ function BudgetComparison() {
     getUnbudgetedAmount,
     getTargetPercentage,
   } = useBudget();
+  const { designLanguage } = useDesignLanguage();
+  const isDelight = designLanguage === "delight";
   const totalIncome = getTotalIncome();
   const unbudgeted = getUnbudgetedAmount();
 
@@ -185,9 +190,21 @@ function BudgetComparison() {
       <div className="space-y-5 sm:space-y-4">
         {categories.map((category, index) => {
           const config = CATEGORY_CONFIG[category];
+          const categoryColor = getCategoryColor(category, designLanguage);
           const actual = getPercentageOfIncome(category);
           const target = getTargetPercentage(category);
           const diff = actual - target;
+          const diffBadgeClass = isDelight
+            ? Math.abs(diff) <= 5
+              ? "bg-emerald-100/75 text-emerald-900 dark:bg-emerald-900/45 dark:text-emerald-200"
+              : diff > 0
+              ? "bg-rose-100/75 text-rose-900 dark:bg-rose-900/45 dark:text-rose-200"
+              : "bg-sky-100/75 text-sky-900 dark:bg-sky-900/45 dark:text-sky-200"
+            : Math.abs(diff) <= 5
+            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+            : diff > 0
+            ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+            : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
 
           return (
             <motion.div
@@ -199,8 +216,11 @@ function BudgetComparison() {
             >
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
                 <span
-                  className="text-base sm:text-sm font-semibold"
-                  style={{ color: config.color }}
+                  className={cn(
+                    "text-base sm:text-sm font-semibold",
+                    isDelight && "tracking-wide"
+                  )}
+                  style={{ color: categoryColor }}
                 >
                   {config.label}
                 </span>
@@ -220,13 +240,10 @@ function BudgetComparison() {
                     initial={{ scale: 0.8, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ delay: 0.15 + index * 0.05 }}
-                    className={`text-xs font-semibold px-2 py-1 rounded-md self-start ${
-                      Math.abs(diff) <= 5
-                        ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                        : diff > 0
-                        ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                        : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                    }`}
+                    className={cn(
+                      "text-xs font-semibold px-2 py-1 rounded-md self-start",
+                      diffBadgeClass
+                    )}
                   >
                     {diff > 0 ? "+" : ""}
                     {diff.toFixed(1)}%
@@ -243,7 +260,7 @@ function BudgetComparison() {
                     ease: "easeOut",
                   }}
                   className="absolute left-0 h-full rounded-full"
-                  style={{ backgroundColor: config.color }}
+                  style={{ backgroundColor: categoryColor }}
                 />
                 <div
                   className="absolute h-full w-0.5 bg-foreground/50"
@@ -291,6 +308,8 @@ function BudgetComparison() {
                   ? "bg-destructive"
                   : unbudgeted === 0
                   ? "bg-muted-foreground"
+                  : isDelight
+                  ? "bg-slate-500/70 dark:bg-slate-300/70"
                   : "bg-slate-400"
               }`}
             />
@@ -386,13 +405,22 @@ function CommandPaletteButton() {
 
 function BudgetDashboard() {
   const { getTargetPercentage } = useBudget();
+  const { designLanguage } = useDesignLanguage();
+  const isDelight = designLanguage === "delight";
   const targetNeeds = getTargetPercentage("needs");
   const targetWants = getTargetPercentage("wants");
   const targetSavings = getTargetPercentage("savings");
   const targetString = `${targetNeeds} / ${targetWants} / ${targetSavings}`;
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+    <div
+      className={cn(
+        "min-h-screen",
+        isDelight
+          ? "bg-background delight-grid-background"
+          : "bg-linear-to-br from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950"
+      )}
+    >
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         {/* Top Bar - Command Palette & Theme Toggle */}
         <motion.div
@@ -415,10 +443,17 @@ function BudgetDashboard() {
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="flex flex-col items-center justify-center gap-1 mb-2"
-          >
-            <h1 className="text-4xl font-bold bg-linear-to-r from-slate-900 via-slate-700 to-slate-900 dark:from-white dark:via-slate-300 dark:to-white bg-clip-text text-transparent">
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="flex flex-col items-center justify-center gap-1 mb-2"
+        >
+            <h1
+              className={cn(
+                "text-4xl",
+                isDelight
+                  ? "delight-serif-display font-semibold sm:text-5xl text-foreground"
+                  : "font-bold bg-linear-to-r from-slate-900 via-slate-700 to-slate-900 dark:from-white dark:via-slate-300 dark:to-white bg-clip-text text-transparent"
+              )}
+            >
               <span className="block">Oversight</span>
               <span className="block">Budget Planner</span>
             </h1>
@@ -427,7 +462,12 @@ function BudgetDashboard() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.2 }}
-            className="text-muted-foreground text-lg"
+            className={cn(
+              "text-lg",
+              isDelight
+                ? "text-foreground/75 delight-serif-display"
+                : "text-muted-foreground"
+            )}
           >
             Manage your money
             <br className="sm:hidden" /> with the{" "}
@@ -441,7 +481,7 @@ function BudgetDashboard() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.3 }}
-            className="text-muted-foreground text-sm"
+            className={cn("text-sm", isDelight ? "delight-meta" : "text-muted-foreground")}
           >
             By Ali Shariatmadari
           </motion.p>
@@ -469,7 +509,9 @@ function BudgetDashboard() {
                       type: "spring",
                     }}
                     className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: CATEGORY_CONFIG[category].color }}
+                    style={{
+                      backgroundColor: getCategoryColor(category, designLanguage),
+                    }}
                   />
                   <span>
                     <strong>

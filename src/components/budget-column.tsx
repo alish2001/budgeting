@@ -12,6 +12,8 @@ import {
 import { useBudget } from "@/lib/budget-context";
 import { formatCurrency } from "@/lib/utils";
 import { BudgetInput } from "@/components/budget-input";
+import { useDesignLanguage } from "@/lib/design-language-context";
+import { getCategoryColor } from "@/lib/design-language";
 
 interface BudgetColumnProps {
   category: CategoryName;
@@ -30,8 +32,10 @@ export const BudgetColumn = memo(function BudgetColumn({
     getPercentageOfIncome,
     getTargetPercentage,
   } = useBudget();
+  const { designLanguage } = useDesignLanguage();
 
   const config = CATEGORY_CONFIG[category];
+  const categoryColor = getCategoryColor(category, designLanguage);
   const items = state.categories[category].items;
   const total = getTotalByCategory(category);
   const isIncome = category === "income";
@@ -44,7 +48,7 @@ export const BudgetColumn = memo(function BudgetColumn({
   return (
     <Card
       className="flex flex-col h-full"
-      style={{ borderTopColor: config.color, borderTopWidth: "3px" }}
+      style={{ borderTopColor: categoryColor, borderTopWidth: "3px" }}
     >
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
@@ -55,8 +59,8 @@ export const BudgetColumn = memo(function BudgetColumn({
             <span
               className="text-xs font-medium px-2 py-1 rounded-full"
               style={{
-                backgroundColor: `${config.color}20`,
-                color: config.color,
+                backgroundColor: `${categoryColor}20`,
+                color: categoryColor,
               }}
             >
               Target: {target}%
@@ -69,7 +73,7 @@ export const BudgetColumn = memo(function BudgetColumn({
             <span
               className="text-sm font-medium"
               style={{
-                color: percentage > target ? "#ef4444" : config.color,
+                color: percentage > target ? "#ef4444" : categoryColor,
               }}
             >
               ({percentage.toFixed(1)}%)
@@ -185,7 +189,7 @@ export const BudgetColumn = memo(function BudgetColumn({
                 variant="outline"
                 className="w-full mt-auto"
                 onClick={() => setIsAdding(true)}
-                style={{ borderColor: config.color, color: config.color }}
+                style={{ borderColor: categoryColor, color: categoryColor }}
               >
                 + Add Item
               </Button>

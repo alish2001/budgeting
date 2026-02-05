@@ -7,6 +7,11 @@ import {
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { ThemeProvider } from "@/components/theme-provider";
+import { DesignLanguageProvider } from "@/lib/design-language-context";
+import {
+  DEFAULT_DESIGN_LANGUAGE,
+  DESIGN_LANGUAGE_STORAGE_KEY,
+} from "@/lib/design-language";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -94,6 +99,18 @@ export const metadata: Metadata = {
   },
 };
 
+const designLanguageInitScript = `(() => {
+  try {
+    const stored = localStorage.getItem("${DESIGN_LANGUAGE_STORAGE_KEY}");
+    const next = stored === "delight" || stored === "cyberpunk"
+      ? stored
+      : "${DEFAULT_DESIGN_LANGUAGE}";
+    document.documentElement.setAttribute("data-design-language", next);
+  } catch {
+    document.documentElement.setAttribute("data-design-language", "${DEFAULT_DESIGN_LANGUAGE}");
+  }
+})();`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -101,6 +118,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: designLanguageInitScript }} />
+      </head>
       <body
         className={`${spaceGrotesk.variable} ${jetbrainsMono.variable} ${libreBaskerville.variable} font-sans antialiased`}
       >
@@ -110,7 +130,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {children}
+          <DesignLanguageProvider>{children}</DesignLanguageProvider>
         </ThemeProvider>
         <Analytics />
         <SpeedInsights />

@@ -27,7 +27,9 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { useBudget } from "@/lib/budget-context";
 import { formatCurrency } from "@/lib/utils";
-import { BudgetItem, CATEGORY_CONFIG, SpendingCategoryName } from "@/types/budget";
+import { BudgetItem, SpendingCategoryName } from "@/types/budget";
+import { useDesignLanguage } from "@/lib/design-language-context";
+import { getCategoryColor, getItemizedCategoryPalette } from "@/lib/design-language";
 
 type AssumptionMode = "monthly" | "yearly";
 type BreakdownMode = "itemized" | "category";
@@ -57,12 +59,6 @@ interface ItemSeriesMeta {
 
 const HORIZON_PRESETS = [1, 3, 6, 12, 24];
 
-const ITEM_COLOR_PALETTES: Record<SpendingCategoryName, string[]> = {
-  needs: ["#ef4444", "#f97316", "#fb7185", "#f43f5e", "#dc2626"],
-  wants: ["#3b82f6", "#0ea5e9", "#06b6d4", "#2563eb", "#38bdf8"],
-  savings: ["#22c55e", "#10b981", "#84cc16", "#16a34a", "#65a30d"],
-};
-
 function roundCurrency(value: number): number {
   return Math.round(value * 100) / 100;
 }
@@ -80,6 +76,7 @@ function createItemKey(category: SpendingCategoryName, item: BudgetItem, index: 
 
 export function BudgetProjectionCard() {
   const { state, getTotalByCategory, getTotalIncome } = useBudget();
+  const { designLanguage } = useDesignLanguage();
 
   const [isOpen, setIsOpen] = useState(true);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
@@ -126,7 +123,7 @@ export function BudgetProjectionCard() {
     const categories: SpendingCategoryName[] = ["needs", "wants", "savings"];
 
     return categories.flatMap((category) => {
-      const palette = ITEM_COLOR_PALETTES[category];
+      const palette = getItemizedCategoryPalette(category, designLanguage);
 
       return state.categories[category].items.map((item, index) => ({
         key: createItemKey(category, item, index),
@@ -135,7 +132,7 @@ export function BudgetProjectionCard() {
         color: palette[index % palette.length],
       }));
     });
-  }, [monthlyFactor, state.categories]);
+  }, [designLanguage, monthlyFactor, state.categories]);
 
   const rawProjection = useMemo<ProjectionPoint[]>(() => {
     const points: ProjectionPoint[] = [];
@@ -207,25 +204,25 @@ export function BudgetProjectionCard() {
         {
           dataKey: "needs",
           label: "Needs",
-          color: CATEGORY_CONFIG.needs.color,
+          color: getCategoryColor("needs", designLanguage),
           kind: "area",
         },
         {
           dataKey: "wants",
           label: "Wants",
-          color: CATEGORY_CONFIG.wants.color,
+          color: getCategoryColor("wants", designLanguage),
           kind: "area",
         },
         {
           dataKey: "savingsContribution",
           label: "Savings (No Interest)",
-          color: CATEGORY_CONFIG.savings.color,
+          color: getCategoryColor("savings", designLanguage),
           kind: "lineDashed",
         },
         {
           dataKey: "savingsWithInterest",
           label: "Savings (With Interest)",
-          color: CATEGORY_CONFIG.savings.color,
+          color: getCategoryColor("savings", designLanguage),
           kind: "line",
         },
         {
@@ -252,7 +249,7 @@ export function BudgetProjectionCard() {
     itemized.push({
       dataKey: "savingsWithInterest",
       label: "Savings (With Interest)",
-      color: CATEGORY_CONFIG.savings.color,
+      color: getCategoryColor("savings", designLanguage),
       kind: "line",
     });
     itemized.push({
@@ -263,7 +260,7 @@ export function BudgetProjectionCard() {
     });
 
     return itemized;
-  }, [breakdownMode, itemSeries]);
+  }, [breakdownMode, designLanguage, itemSeries]);
 
   const seriesLabelLookup = useMemo(() => {
     const entries = series.map((entry) => [entry.dataKey, entry.label]);
@@ -680,7 +677,7 @@ export function BudgetProjectionCard() {
                         <p className="text-muted-foreground">Needs by end</p>
                         <p
                           className="font-semibold"
-                          style={{ color: CATEGORY_CONFIG.needs.color }}
+                          style={{ color: getCategoryColor("needs", designLanguage) }}
                         >
                           {formatCurrency(Number(projectionEnd.needs || 0))}
                         </p>
@@ -689,7 +686,7 @@ export function BudgetProjectionCard() {
                         <p className="text-muted-foreground">Wants by end</p>
                         <p
                           className="font-semibold"
-                          style={{ color: CATEGORY_CONFIG.wants.color }}
+                          style={{ color: getCategoryColor("wants", designLanguage) }}
                         >
                           {formatCurrency(Number(projectionEnd.wants || 0))}
                         </p>
@@ -698,7 +695,7 @@ export function BudgetProjectionCard() {
                         <p className="text-muted-foreground">Savings by end</p>
                         <p
                           className="font-semibold"
-                          style={{ color: CATEGORY_CONFIG.savings.color }}
+                          style={{ color: getCategoryColor("savings", designLanguage) }}
                         >
                           {formatCurrency(Number(projectionEnd.savingsWithInterest || 0))}
                         </p>
