@@ -3,7 +3,7 @@ import { CategoryName, SpendingCategoryName } from "@/types/budget";
 export type DesignLanguage = "cyberpunk" | "delight";
 
 export const DESIGN_LANGUAGE_STORAGE_KEY = "budget-planner-design-language";
-export const DEFAULT_DESIGN_LANGUAGE: DesignLanguage = "cyberpunk";
+export const DEFAULT_DESIGN_LANGUAGE: DesignLanguage = "delight";
 
 const VALID_DESIGN_LANGUAGES: DesignLanguage[] = ["cyberpunk", "delight"];
 
