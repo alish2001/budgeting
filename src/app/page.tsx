@@ -107,7 +107,7 @@ function CurrentBudgetName() {
               if (e.key === "Enter") handleSave();
               if (e.key === "Escape") handleCancel();
             }}
-            placeholder="Enter budget name..."
+            placeholder="Enter budget name…"
             className="h-8 text-sm w-48"
           />
           <button

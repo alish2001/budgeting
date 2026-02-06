@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useSyncExternalStore } from "react";
+import { useRef, useState, useCallback, useSyncExternalStore } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -65,7 +65,7 @@ function getServerSnapshot(): SavedBudget[] {
 export function BudgetManager() {
   const { state, importBudget, isHydrated, getTotalIncome, setCurrentBudgetName } = useBudget();
   const [isOpen, setIsOpen] = useState(false);
-  const [newBudgetName, setNewBudgetName] = useState("");
+  const saveNameInputRef = useRef<HTMLInputElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -85,7 +85,6 @@ export function BudgetManager() {
     state.categories.needs.items.length > 0 ||
     state.categories.wants.items.length > 0 ||
     state.categories.savings.items.length > 0;
-  const saveNameInputValue = newBudgetName || state.currentBudgetName || "";
 
   const handleSaveBudget = useCallback(() => {
     if (isSaving || !hasCurrentBudget) return;
@@ -93,17 +92,18 @@ export function BudgetManager() {
     setIsSaving(true);
 
     setTimeout(() => {
-      const name = newBudgetName.trim() || state.currentBudgetName || generateBudgetName();
+      const inputName = saveNameInputRef.current?.value ?? "";
+      const name =
+        inputName.trim() || state.currentBudgetName || generateBudgetName();
       saveBudgetToStorage(state, name);
       setCurrentBudgetName(name);
       notifyBudgetStorageChange();
-      setNewBudgetName(name);
       setIsSaving(false);
       setShowSaveSuccess(true);
 
       setTimeout(() => setShowSaveSuccess(false), 2000);
     }, 300);
-  }, [state, newBudgetName, isSaving, hasCurrentBudget, setCurrentBudgetName]);
+  }, [state, isSaving, hasCurrentBudget, setCurrentBudgetName]);
 
   const handleLoadBudget = useCallback(
     (budget: SavedBudget) => {
@@ -222,9 +222,10 @@ export function BudgetManager() {
                 <div className="flex flex-col sm:flex-row gap-2">
                   <Input
                     id="save-budget-name"
+                    key={state.currentBudgetName || "budget-name"}
+                    ref={saveNameInputRef}
                     placeholder={generateBudgetName()}
-                    value={saveNameInputValue}
-                    onChange={(e) => setNewBudgetName(e.target.value)}
+                    defaultValue={state.currentBudgetName || ""}
                     className="flex-1"
                     disabled={isSaving || !hasCurrentBudget}
                   />

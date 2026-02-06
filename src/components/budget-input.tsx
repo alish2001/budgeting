@@ -26,6 +26,14 @@ export const BudgetInput = memo(function BudgetInput({
   const [buttonShake, setButtonShake] = useState(false);
   const { addItem, updateItem } = useBudget();
   const isEditing = !!item;
+  const labelPlaceholder =
+    category === "income"
+      ? "e.g., Salary…"
+      : category === "needs"
+      ? "e.g., Rent…"
+      : category === "wants"
+      ? "e.g., Eating out…"
+      : "e.g., Emergency fund…";
 
   const syncItemToState = useEffectEvent(
     (currentItem: BudgetItem | undefined) => {
@@ -142,7 +150,7 @@ export const BudgetInput = memo(function BudgetInput({
         <Input
           id={`label-${category}-${item?.id || "new"}`}
           type="text"
-          placeholder="e.g., Rent, Groceries..."
+          placeholder={labelPlaceholder}
           value={label}
           onChange={handleLabelChange}
           className="h-8 text-base"
