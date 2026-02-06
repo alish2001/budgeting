@@ -772,6 +772,7 @@ When making changes:
 - Ensure animations feel snappy for power users
 - Maintain accessibility (ARIA labels, keyboard navigation)
 - Keep bundle size in mind (prefer tree-shakeable imports)
+- Always run `bun lint` and `bun run build` before committing, and make sure both succeed before additional testing.
 
 
 # Vercel Guidelines 
