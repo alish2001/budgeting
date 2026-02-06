@@ -16,7 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { useBudget } from "@/lib/budget-context";
+import { CURRENT_BUDGET_STORAGE_KEY, useBudget } from "@/lib/budget-context";
 import { setSkippedOnboarding } from "@/lib/onboarding-gate";
 import { cn, formatCurrency } from "@/lib/utils";
 import { useDesignLanguage } from "@/lib/design-language-context";
@@ -765,15 +765,16 @@ export function OnboardingFlow() {
   const hasExistingStoredBudget = useMemo(() => {
     if (!isHydrated) return false;
     try {
-      const stored = localStorage.getItem("budget-planner-data");
+      const stored = localStorage.getItem(CURRENT_BUDGET_STORAGE_KEY);
       if (!stored) return false;
       const parsed = JSON.parse(stored);
+      const budgetData = parsed?.currentBudget;
 
       return (
-        (parsed?.categories?.income?.items?.length ?? 0) > 0 ||
-        (parsed?.categories?.needs?.items?.length ?? 0) > 0 ||
-        (parsed?.categories?.wants?.items?.length ?? 0) > 0 ||
-        (parsed?.categories?.savings?.items?.length ?? 0) > 0
+        (budgetData?.categories?.income?.items?.length ?? 0) > 0 ||
+        (budgetData?.categories?.needs?.items?.length ?? 0) > 0 ||
+        (budgetData?.categories?.wants?.items?.length ?? 0) > 0 ||
+        (budgetData?.categories?.savings?.items?.length ?? 0) > 0
       );
     } catch {
       return false;

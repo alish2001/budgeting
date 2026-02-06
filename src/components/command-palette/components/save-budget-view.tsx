@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowLeft, Check, Loader2, Save } from "lucide-react";
 import { useBudget } from "@/lib/budget-context";
-import { generateBudgetName, saveBudgetToStorage } from "@/lib/budget-storage";
+import { generateBudgetName } from "@/lib/budget-storage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,7 +16,7 @@ interface SaveBudgetViewProps {
 }
 
 export function SaveBudgetView({ onCancel, onSuccess }: SaveBudgetViewProps) {
-  const { state, setCurrentBudgetName, isHydrated, getTotalIncome } = useBudget();
+  const { state, saveCurrentBudget, isHydrated, getTotalIncome } = useBudget();
   const [name, setName] = useState(state.currentBudgetName || "");
   const [isSaving, setIsSaving] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -41,8 +41,7 @@ export function SaveBudgetView({ onCancel, onSuccess }: SaveBudgetViewProps) {
     setIsSaving(true);
     const trimmed = name.trim();
     const nextName = trimmed || state.currentBudgetName || defaultName;
-    saveBudgetToStorage(state, nextName);
-    setCurrentBudgetName(nextName);
+    saveCurrentBudget(nextName);
     setTimeout(() => {
       setIsSaving(false);
       onSuccess();

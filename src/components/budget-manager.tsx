@@ -1,20 +1,13 @@
 "use client";
 
-import { useRef, useState, useCallback, useSyncExternalStore } from "react";
+import { useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useBudget } from "@/lib/budget-context";
-import {
-  getSavedBudgets,
-  saveBudgetToStorage,
-  deleteSavedBudget,
-  renameSavedBudget,
-  formatBudgetDate,
-  generateBudgetName,
-} from "@/lib/budget-storage";
+import { formatBudgetDate, generateBudgetName } from "@/lib/budget-storage";
 import { SavedBudget, SerializedBudget } from "@/types/budget";
 import { formatCurrency } from "@/lib/utils";
 import {
@@ -29,41 +22,17 @@ import {
   Loader2,
 } from "lucide-react";
 
-// Cache for useSyncExternalStore - must return same reference if data unchanged
-let cachedBudgets: SavedBudget[] = [];
-let cachedVersion = -1;
-const budgetStorageListeners = new Set<() => void>();
-
-function notifyBudgetStorageChange() {
-  // Invalidate cache and notify listeners
-  cachedVersion = -1;
-  budgetStorageListeners.forEach((listener) => listener());
-}
-
-function subscribeToBudgetStorage(callback: () => void) {
-  budgetStorageListeners.add(callback);
-  return () => budgetStorageListeners.delete(callback);
-}
-
-function getBudgetStorageSnapshot(): SavedBudget[] {
-  // Only fetch from localStorage if cache is invalidated
-  if (cachedVersion === -1) {
-    cachedBudgets = getSavedBudgets();
-    cachedVersion = 0;
-  }
-  return cachedBudgets;
-}
-
-// Cache the server snapshot to avoid infinite loop
-// (React requires getServerSnapshot to return the same reference)
-const EMPTY_SAVED_BUDGETS: SavedBudget[] = [];
-
-function getServerSnapshot(): SavedBudget[] {
-  return EMPTY_SAVED_BUDGETS;
-}
-
 export function BudgetManager() {
-  const { state, importBudget, isHydrated, getTotalIncome, setCurrentBudgetName } = useBudget();
+  const {
+    state,
+    savedBudgets,
+    loadSavedBudget,
+    saveCurrentBudget,
+    renameSavedBudget,
+    deleteSavedBudget,
+    isHydrated,
+    getTotalIncome,
+  } = useBudget();
   const [isOpen, setIsOpen] = useState(false);
   const saveNameInputRef = useRef<HTMLInputElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -71,13 +40,6 @@ export function BudgetManager() {
   const [isSaving, setIsSaving] = useState(false);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
   const [loadingId, setLoadingId] = useState<string | null>(null);
-
-  // Use useSyncExternalStore to read saved budgets from localStorage
-  const savedBudgets = useSyncExternalStore(
-    subscribeToBudgetStorage,
-    getBudgetStorageSnapshot,
-    getServerSnapshot
-  );
 
   const totalIncome = getTotalIncome();
   const hasCurrentBudget =
@@ -95,35 +57,28 @@ export function BudgetManager() {
       const inputName = saveNameInputRef.current?.value ?? "";
       const name =
         inputName.trim() || state.currentBudgetName || generateBudgetName();
-      saveBudgetToStorage(state, name);
-      setCurrentBudgetName(name);
-      notifyBudgetStorageChange();
+      saveCurrentBudget(name);
       setIsSaving(false);
       setShowSaveSuccess(true);
 
       setTimeout(() => setShowSaveSuccess(false), 2000);
     }, 300);
-  }, [state, isSaving, hasCurrentBudget, setCurrentBudgetName]);
+  }, [state.currentBudgetName, isSaving, hasCurrentBudget, saveCurrentBudget]);
 
-  const handleLoadBudget = useCallback(
-    (budget: SavedBudget) => {
-      setLoadingId(budget.id);
+  const handleLoadBudget = useCallback((budget: SavedBudget) => {
+    setLoadingId(budget.id);
 
-      setTimeout(() => {
-        importBudget(budget.data);
-        setCurrentBudgetName(budget.name);
-        setLoadingId(null);
-      }, 300);
-    },
-    [importBudget, setCurrentBudgetName]
-  );
+    setTimeout(() => {
+      loadSavedBudget(budget.id);
+      setLoadingId(null);
+    }, 300);
+  }, [loadSavedBudget]);
 
   const handleDeleteBudget = useCallback((id: string) => {
     if (confirm("Are you sure you want to delete this saved budget?")) {
       deleteSavedBudget(id);
-      notifyBudgetStorageChange();
     }
-  }, []);
+  }, [deleteSavedBudget]);
 
   const handleStartRename = useCallback((budget: SavedBudget) => {
     setEditingId(budget.id);
@@ -134,10 +89,9 @@ export function BudgetManager() {
     if (!editingId || !editName.trim()) return;
 
     renameSavedBudget(editingId, editName.trim());
-    notifyBudgetStorageChange();
     setEditingId(null);
     setEditName("");
-  }, [editingId, editName]);
+  }, [editingId, editName, renameSavedBudget]);
 
   const handleCancelRename = useCallback(() => {
     setEditingId(null);
@@ -147,7 +101,7 @@ export function BudgetManager() {
   const getBudgetSummary = (data: SerializedBudget) => {
     const totalIncome = data.items.income.reduce(
       (sum, item) => sum + item.amount,
-      0
+      0,
     );
     const totalItems =
       data.items.needs.length +
@@ -213,7 +167,6 @@ export function BudgetManager() {
             transition={{ duration: 0.2 }}
           >
             <CardContent className="space-y-5 pt-2 pb-5">
-              {/* Save Current Budget */}
               <div className="space-y-3 rounded-lg border border-border/60 p-4">
                 <Label className="text-sm font-semibold flex items-center gap-2">
                   <Save className="h-4 w-4" />
@@ -264,7 +217,6 @@ export function BudgetManager() {
                 )}
               </div>
 
-              {/* Saved Budgets List */}
               {savedBudgets.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <FolderOpen className="h-12 w-12 mx-auto mb-3 opacity-50" />
@@ -276,9 +228,7 @@ export function BudgetManager() {
               ) : (
                 <div className="space-y-2">
                   {savedBudgets.map((budget, index) => {
-                    const { totalIncome, totalItems } = getBudgetSummary(
-                      budget.data
-                    );
+                    const { totalIncome, totalItems } = getBudgetSummary(budget.data);
                     const isEditing = editingId === budget.id;
                     const isLoading = loadingId === budget.id;
 
@@ -325,12 +275,9 @@ export function BudgetManager() {
                               </div>
                             ) : (
                               <>
-                                <h4 className="font-medium text-sm truncate">
-                                  {budget.name}
-                                </h4>
+                                <h4 className="font-medium text-sm truncate">{budget.name}</h4>
                                 <p className="text-xs text-muted-foreground mt-0.5">
-                                  {formatBudgetDate(budget.lastModifiedAt)} •{" "}
-                                  {totalItems} items •{" "}
+                                  {formatBudgetDate(budget.lastModifiedAt)} • {totalItems} items • {" "}
                                   {formatCurrency(totalIncome)} income
                                 </p>
                               </>

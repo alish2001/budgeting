@@ -8,7 +8,6 @@ import { useBudget } from "@/lib/budget-context";
 import { SavedBudget } from "@/types/budget";
 import { formatCurrency } from "@/lib/utils";
 import { formatBudgetDate } from "@/lib/budget-storage";
-import { useSavedBudgets } from "../hooks/use-saved-budgets";
 import { KeyboardShortcut } from "./keyboard-shortcut";
 
 interface SwitchBudgetViewProps {
@@ -17,16 +16,14 @@ interface SwitchBudgetViewProps {
 }
 
 export function SwitchBudgetView({ onCancel, onSuccess }: SwitchBudgetViewProps) {
-  const { importBudget, isHydrated, setCurrentBudgetName } = useBudget();
+  const { savedBudgets, loadSavedBudget, isHydrated } = useBudget();
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-
-  const savedBudgets = useSavedBudgets();
 
   const getBudgetSummary = (budget: SavedBudget) => {
     const totalIncome = budget.data.items.income.reduce(
       (sum, item) => sum + item.amount,
-      0
+      0,
     );
     const totalItems =
       budget.data.items.needs.length +
@@ -40,15 +37,16 @@ export function SwitchBudgetView({ onCancel, onSuccess }: SwitchBudgetViewProps)
     setLoadingId(budget.id);
 
     setTimeout(() => {
-      importBudget(budget.data);
-      setCurrentBudgetName(budget.name);
+      const loaded = loadSavedBudget(budget.id);
       setLoadingId(null);
-      onSuccess();
+      if (loaded) {
+        onSuccess();
+      }
     }, 300);
   };
 
   const filteredBudgets = savedBudgets.filter((budget) =>
-    budget.name.toLowerCase().includes(search.toLowerCase())
+    budget.name.toLowerCase().includes(search.toLowerCase()),
   );
 
   if (!isHydrated) return null;
@@ -60,7 +58,6 @@ export function SwitchBudgetView({ onCancel, onSuccess }: SwitchBudgetViewProps)
       exit={{ opacity: 0 }}
       transition={{ duration: 0.1 }}
     >
-      {/* Search Input */}
       <div className="flex items-center border-b border-border px-3">
         <button
           onClick={onCancel}
@@ -80,12 +77,9 @@ export function SwitchBudgetView({ onCancel, onSuccess }: SwitchBudgetViewProps)
         <KeyboardShortcut shortcut="ESC" />
       </div>
 
-      {/* Budgets List */}
       <Command.List className="max-h-[calc(min(500px,80vh)-3rem)] overflow-y-auto p-2">
         <Command.Empty className="py-6 text-center text-sm text-muted-foreground">
-          {savedBudgets.length === 0
-            ? "No saved budgets yet"
-            : "No budgets found"}
+          {savedBudgets.length === 0 ? "No saved budgets yet" : "No budgets found"}
         </Command.Empty>
 
         {filteredBudgets.map((budget) => {
@@ -104,8 +98,8 @@ export function SwitchBudgetView({ onCancel, onSuccess }: SwitchBudgetViewProps)
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{budget.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  {formatBudgetDate(budget.lastModifiedAt)} • {totalItems} items
-                  • {formatCurrency(totalIncome)} income
+                  {formatBudgetDate(budget.lastModifiedAt)} • {totalItems} items • {" "}
+                  {formatCurrency(totalIncome)} income
                 </p>
               </div>
               {isLoading && (

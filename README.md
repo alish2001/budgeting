@@ -8,7 +8,8 @@ A modern budgeting web application that helps you track expenses using the **50/
 - **Interactive pie charts** - Visualize budget breakdown with drill-down analysis
 - **Real-time calculations** - Automatic totals and percentage tracking
 - **Target comparison** - Visual progress bars comparing actual vs. target percentages
-- **Persistent storage** - Auto-save to browser localStorage
+- **Command palette** - Quick save/switch/rename/delete saved budget flows via `Cmd/Ctrl+K`
+- **Persistent storage** - In-memory UI state with debounced localStorage persistence (`oversight-current-budget-v2`, `oversight-saved-budgets-v2`, `oversight-app-meta-v2`)
 - **Dark mode** - Automatic theme switching
 - **Responsive design** - Optimized for all devices
 

@@ -19,7 +19,8 @@ The application provides real-time visualization, income tracking, and detailed 
 - **Customizable Targets**: Adjust budget percentages from default 50/30/20 rule
 - **Guided Onboarding**: Step-by-step setup flow at `/onboarding` with review/confirm dialogs
 - **Command Palette (`Cmd/Ctrl+K`)**:
-  - Quick actions for add/edit/remove/import/share/switch budget
+  - Quick actions for add/edit/remove/import/share/save/switch budget
+  - Saved budget management inside palette: rename and delete flows with confirmation
   - Built-in **theme picker** action (light/dark toggle)
   - Built-in **design language picker** (Cyberpunk / Delight)
   - Mounted on dashboard route (`/`) only
@@ -132,9 +133,8 @@ budgeting/
 │   │   ├── category-breakdown.tsx # Drill-down view
 │   │   ├── command-palette/
 │   │   │   ├── index.tsx          # Cmd/Ctrl+K command palette (dashboard-only mount)
-│   │   │   ├── components/        # Palette subviews/forms
+│   │   │   ├── components/        # Palette subviews/forms (including saved budget rename/delete flows)
 │   │   │   ├── constants.ts       # Palette icon/category constants
-│   │   │   ├── hooks/             # Palette data hooks
 │   │   │   └── types.ts           # Palette mode/view types
 │   │   ├── import-budget-dialog.tsx  # Import shared budget dialog
 │   │   ├── onboarding/
@@ -146,7 +146,7 @@ budgeting/
 │   ├── lib/
 │   │   ├── budget-context.tsx     # Global state management
 │   │   ├── budget-serialization.ts # Encode/decode for sharing
-│   │   ├── budget-storage.ts      # Multi-budget localStorage
+│   │   ├── budget-storage.ts      # Saved budget helper utilities (date/name formatting)
 │   │   ├── design-language-context.tsx # Design language state + persistence
 │   │   ├── design-language.ts     # Design language types + color mappings
 │   │   └── utils.ts               # Utility functions (cn, formatCurrency)
@@ -241,7 +241,7 @@ The application will be available at `http://localhost:3000`
 2. **Hot reload** is automatic (Turbopack)
 3. **Check for errors** in terminal and browser console
 4. **Test** in both light and dark modes and both design languages (Delight/Cyberpunk)
-5. **Verify** localStorage persistence (`budget-planner-data`, `budget-planner-saved-budgets`, `budget-planner-design-language`)
+5. **Verify** localStorage persistence (`oversight-current-budget-v2`, `oversight-saved-budgets-v2`, `oversight-app-meta-v2`, `budget-planner-design-language`)
 6. run `bun lint` to check for errors and fix them
 7. run `bun build` to build the application for production and see if there are any erros
 
@@ -270,11 +270,11 @@ bun run lint
 
 The application uses React Context API with `useReducer` for global state:
 
-- **State Structure**: `BudgetState` with categories, selected category, and target percentages
-- **Actions**: ADD_ITEM, REMOVE_ITEM, UPDATE_ITEM, SET_SELECTED_CATEGORY, UPDATE_TARGET_PERCENTAGES, CLEAR_ALL, LOAD_FROM_STORAGE, IMPORT_BUDGET
-- **Persistence**: Automatic localStorage sync (client-side only)
+- **State Structure**: Unified in-memory store with `currentBudget`, `savedBudgets`, and `revision`
+- **Actions**: ADD/REMOVE/UPDATE item, target updates, import, save/load/rename/delete saved budgets, hydration
+- **Persistence**: Debounced split-key localStorage sync (client-side only)
 - **Hydration**: Uses `useSyncExternalStore` to prevent SSR/client mismatches
-- **Performance**: All context functions are memoized with `useCallback`
+- **Performance**: All context functions are memoized with `useCallback`; current-budget and saved-budgets slices persist independently for smaller writes
 
 **Key Functions**:
 
@@ -288,6 +288,10 @@ The application uses React Context API with `useReducer` for global state:
 - `resetTargetPercentages()` - Reset to default 50/30/20 targets
 - `importBudget(data)` - Import a serialized budget (from sharing)
 - `exportBudget()` - Export current budget as serialized format
+- `saveCurrentBudget(name?)` - Save current in-memory budget to saved budgets
+- `loadSavedBudget(id)` - Load a saved budget into current state
+- `renameSavedBudget(id, newName)` - Rename a saved budget entry
+- `deleteSavedBudget(id)` - Delete a saved budget entry
 
 ### Design Language State Management
 
@@ -434,18 +438,13 @@ The sharing system uses compression and URL-safe encoding:
 
 ### Multi-Budget Storage
 
-**Location**: `src/lib/budget-storage.ts`
+**Locations**: `src/lib/budget-context.tsx`, `src/lib/budget-storage.ts`
 
-**Storage Key**: `"budget-planner-saved-budgets"`
-
-- `getSavedBudgets()` - Load all saved budgets array
-- `saveBudgetToStorage(state, name?)` - Save current budget
-- `saveSerializedBudgetToStorage(data, name?)` - Save imported budget
-- `getSavedBudgetById(id)` - Get specific saved budget
-- `updateSavedBudget(id, state)` - Update existing saved budget
-- `renameSavedBudget(id, newName)` - Rename a saved budget
-- `deleteSavedBudget(id)` - Delete a saved budget
-- `generateBudgetName()` - Auto-generate name with timestamp
+- Saved budgets are managed in-memory in `BudgetContext` (single source of truth)
+- Persistence is handled by context to split v2 keys (current budget, saved budgets, and revision meta)
+- `budget-storage.ts` now provides helper utilities only:
+  - `generateBudgetName()` - Auto-generate name with timestamp
+  - `formatBudgetDate(dateString)` - Render timestamps for UI
 
 ### Styling System
 
@@ -495,20 +494,25 @@ The sharing system uses compression and URL-safe encoding:
 
 ### Data Persistence
 
-**Current Budget Storage Key**: `"budget-planner-data"`
+**Current Budget Storage Key**: `"oversight-current-budget-v2"`
 
-**Format**: JSON stringified object containing:
-- `categories`: Items for each category (needs, wants, savings, income)
-- `targetPercentages`: Custom target percentages (if modified from defaults)
-- `currentBudgetName`: Optional current budget display name
+**Saved Budgets Storage Key**: `"oversight-saved-budgets-v2"`
+
+**Shared Revision Meta Key**: `"oversight-app-meta-v2"`
+
+**Format**:
+- Current budget key stores `version` + current budget payload (categories, targets, name)
+- Saved budgets key stores `version` + saved budgets array
+- Meta key stores `version`, monotonic `revision`, and `updatedAt` for cross-tab sync ordering
 
 **Hydration Strategy**:
 
 1. Server renders with empty initial state
-2. Client hydrates and checks localStorage
-3. If data exists, dispatches `LOAD_FROM_STORAGE` action
-4. Subsequent changes auto-save to localStorage
-5. Custom target percentages are persisted and restored
+2. Client hydrates and loads v2 keys from localStorage
+3. Parsed values are normalized/validated before dispatching hydrate action
+4. Subsequent in-memory changes persist via debounced writes
+5. Pending writes flush on `visibilitychange`/`beforeunload`
+6. Cross-tab `storage` events reconcile by revision (last write wins)
 
 **Design Language Storage Key**: `"budget-planner-design-language"`
 
@@ -516,9 +520,7 @@ The sharing system uses compression and URL-safe encoding:
 - Missing/invalid values fallback to default (`"delight"`)
 - Root layout sets `data-design-language` pre-hydration to reduce flash of wrong style
 
-**Saved Budgets Storage Key**: `"budget-planner-saved-budgets"`
-
-**Format**: JSON array of `SavedBudget` objects, each containing:
+**Saved Budgets Shape**:
 - `id`: Unique identifier (UUID)
 - `name`: User-provided or auto-generated name
 - `createdAt`: ISO timestamp
@@ -755,7 +757,7 @@ When working on this codebase:
 3. **Follow** existing animation patterns (fast for interactive, slower for initial load)
 4. **Memoize** expensive calculations and callbacks
 5. **Test** in both light and dark modes **and** both design languages (Delight/Cyberpunk)
-6. **Verify** localStorage persistence after changes (including custom targets and `budget-planner-design-language`)
+6. **Verify** localStorage persistence after changes (including `oversight-current-budget-v2`, `oversight-saved-budgets-v2`, `oversight-app-meta-v2`, and `budget-planner-design-language`)
 7. **Maintain** TypeScript strict mode compliance
 8. **Use** existing UI components from `src/components/ui/` when possible
 9. **Follow** the established file structure

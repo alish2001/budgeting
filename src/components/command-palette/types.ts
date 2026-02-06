@@ -12,4 +12,6 @@ export type PaletteMode =
   | { type: "import" }
   | { type: "switch-budget" }
   | { type: "save-budget" }
-  | { type: "rename-budget" };
+  | { type: "rename-budget" }
+  | { type: "rename-saved-budget" }
+  | { type: "delete-saved-budget" };
