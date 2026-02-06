@@ -218,7 +218,7 @@ export function BudgetProjectionCard() {
 
   const series = useMemo<SeriesConfig[]>(() => {
     if (breakdownMode === "category") {
-      const categories = [
+      const categories: Array<SeriesConfig & { amount: number }> = [
         {
           dataKey: "needs",
           label: "Needs",
@@ -238,7 +238,11 @@ export function BudgetProjectionCard() {
       return [
         ...categories
           .sort((a, b) => b.amount - a.amount)
-          .map(({ amount: _amount, ...entry }) => entry),
+          .map((category) => {
+            const { amount, ...entry } = category;
+            void amount;
+            return entry;
+          }),
         {
           dataKey: "savingsWithInterest",
           label: "Savings (With Interest)",
