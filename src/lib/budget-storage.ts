@@ -2,6 +2,12 @@ import { SavedBudget, SerializedBudget, BudgetState } from "@/types/budget";
 import { serializeBudget } from "@/lib/budget-serialization";
 
 const SAVED_BUDGETS_KEY = "budget-planner-saved-budgets";
+export const SAVED_BUDGETS_EVENT = "budget-planner-saved-budgets-change";
+
+function notifySavedBudgetsChange() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(SAVED_BUDGETS_EVENT));
+}
 
 /**
  * Generate a human-readable auto name for a budget
@@ -57,6 +63,7 @@ export function saveBudgetToStorage(
 
   budgets.unshift(newBudget); // Add to beginning
   localStorage.setItem(SAVED_BUDGETS_KEY, JSON.stringify(budgets));
+  notifySavedBudgetsChange();
 
   return newBudget;
 }
@@ -81,6 +88,7 @@ export function saveSerializedBudgetToStorage(
 
   budgets.unshift(newBudget);
   localStorage.setItem(SAVED_BUDGETS_KEY, JSON.stringify(budgets));
+  notifySavedBudgetsChange();
 
   return newBudget;
 }
@@ -112,6 +120,7 @@ export function updateSavedBudget(
   };
 
   localStorage.setItem(SAVED_BUDGETS_KEY, JSON.stringify(budgets));
+  notifySavedBudgetsChange();
   return budgets[index];
 }
 
@@ -134,6 +143,7 @@ export function renameSavedBudget(
   };
 
   localStorage.setItem(SAVED_BUDGETS_KEY, JSON.stringify(budgets));
+  notifySavedBudgetsChange();
   return budgets[index];
 }
 
@@ -147,6 +157,7 @@ export function deleteSavedBudget(id: string): boolean {
   if (filtered.length === budgets.length) return false;
 
   localStorage.setItem(SAVED_BUDGETS_KEY, JSON.stringify(filtered));
+  notifySavedBudgetsChange();
   return true;
 }
 
@@ -155,6 +166,7 @@ export function deleteSavedBudget(id: string): boolean {
  */
 export function deleteAllSavedBudgets(): void {
   localStorage.removeItem(SAVED_BUDGETS_KEY);
+  notifySavedBudgetsChange();
 }
 
 /**

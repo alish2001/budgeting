@@ -22,6 +22,7 @@ import {
   Share2,
   Download,
   FolderOpen,
+  Save,
   Edit2,
   Sparkles,
   Check,
@@ -52,6 +53,7 @@ import { ShareBudgetView } from "./components/share-budget-view";
 import { ImportBudgetView } from "./components/import-budget-view";
 import { SwitchBudgetView } from "./components/switch-budget-view";
 import { RenameBudgetView } from "./components/rename-budget-view";
+import { SaveBudgetView } from "./components/save-budget-view";
 
 // Main Command Palette Component
 export function CommandPalette() {
@@ -98,7 +100,18 @@ export function CommandPalette() {
   // Handle keyboard navigation (idiomatic cmdk pattern for nested pages)
   // This follows the exact pattern from cmdk docs for nested pages
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === "Escape" || (e.key === "Backspace" && !search)) {
+    const target = e.target as HTMLElement | null;
+    const isTextInput =
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      Boolean(target?.isContentEditable);
+    const hasTextValue =
+      target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
+        ? target.value.length > 0
+        : Boolean(target?.textContent);
+
+    if (e.key === "Escape" || (e.key === "Backspace" && !search && !hasTextValue)) {
+      if (e.key === "Backspace" && isTextInput) return;
       e.preventDefault();
       if (mode.type !== "default") {
         // Not at root - navigate back to default
@@ -166,6 +179,10 @@ export function CommandPalette() {
           break;
         case "switch-budget":
           setMode({ type: "switch-budget" });
+          setSearch("");
+          break;
+        case "save-budget":
+          setMode({ type: "save-budget" });
           setSearch("");
           break;
         case "rename-budget":
@@ -375,6 +392,14 @@ export function CommandPalette() {
                 <Command.Group heading="Budget" className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
                   {hasItems && (
                     <>
+                      <Command.Item
+                        value="Save Budget"
+                        onSelect={() => handleSelect("save-budget")}
+                        className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
+                      >
+                        <Save className="size-4" />
+                        <span className="flex-1">Save Budget…</span>
+                      </Command.Item>
                       <Command.Item
                         value="Rename Budget"
                         onSelect={() => handleSelect("rename-budget")}
@@ -720,6 +745,18 @@ export function CommandPalette() {
           {mode.type === "rename-budget" && (
             <RenameBudgetView
               key="rename-budget"
+              onCancel={() => setMode({ type: "default" })}
+              onSuccess={() => {
+                setMode({ type: "default" });
+                closePalette();
+              }}
+            />
+          )}
+
+          {/* Save Budget Mode */}
+          {mode.type === "save-budget" && (
+            <SaveBudgetView
+              key="save-budget"
               onCancel={() => setMode({ type: "default" })}
               onSuccess={() => {
                 setMode({ type: "default" });

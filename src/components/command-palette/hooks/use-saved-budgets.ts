@@ -1,14 +1,32 @@
 import { useSyncExternalStore } from "react";
 import { SavedBudget } from "@/types/budget";
-import { getSavedBudgets } from "@/lib/budget-storage";
+import { getSavedBudgets, SAVED_BUDGETS_EVENT } from "@/lib/budget-storage";
 
 let cachedBudgets: SavedBudget[] = [];
 let cachedVersion = -1;
 const budgetStorageListeners = new Set<() => void>();
 
+function notifyBudgetStorageListeners() {
+  cachedVersion = -1;
+  budgetStorageListeners.forEach((listener) => listener());
+}
+
 function subscribeToBudgetStorage(callback: () => void) {
   budgetStorageListeners.add(callback);
-  return () => budgetStorageListeners.delete(callback);
+
+  if (typeof window === "undefined") {
+    return () => budgetStorageListeners.delete(callback);
+  }
+
+  const handleStorageChange = () => notifyBudgetStorageListeners();
+  window.addEventListener("storage", handleStorageChange);
+  window.addEventListener(SAVED_BUDGETS_EVENT, handleStorageChange);
+
+  return () => {
+    budgetStorageListeners.delete(callback);
+    window.removeEventListener("storage", handleStorageChange);
+    window.removeEventListener(SAVED_BUDGETS_EVENT, handleStorageChange);
+  };
 }
 
 function getBudgetStorageSnapshot(): SavedBudget[] {

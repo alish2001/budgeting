@@ -11,4 +11,5 @@ export type PaletteMode =
   | { type: "share" }
   | { type: "import" }
   | { type: "switch-budget" }
+  | { type: "save-budget" }
   | { type: "rename-budget" };
