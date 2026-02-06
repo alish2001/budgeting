@@ -22,6 +22,7 @@ import {
   Share2,
   Download,
   FolderOpen,
+  Save,
   Edit2,
   Sparkles,
   Check,
@@ -52,6 +53,9 @@ import { ShareBudgetView } from "./components/share-budget-view";
 import { ImportBudgetView } from "./components/import-budget-view";
 import { SwitchBudgetView } from "./components/switch-budget-view";
 import { RenameBudgetView } from "./components/rename-budget-view";
+import { SaveBudgetView } from "./components/save-budget-view";
+import { RenameSavedBudgetView } from "./components/rename-saved-budget-view";
+import { DeleteSavedBudgetView } from "./components/delete-saved-budget-view";
 
 // Main Command Palette Component
 export function CommandPalette() {
@@ -65,6 +69,7 @@ export function CommandPalette() {
   const router = useRouter();
   const {
     state,
+    savedBudgets,
     removeItem,
     clearAllData,
     isHydrated,
@@ -98,7 +103,18 @@ export function CommandPalette() {
   // Handle keyboard navigation (idiomatic cmdk pattern for nested pages)
   // This follows the exact pattern from cmdk docs for nested pages
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === "Escape" || (e.key === "Backspace" && !search)) {
+    const target = e.target as HTMLElement | null;
+    const isTextInput =
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      Boolean(target?.isContentEditable);
+    const hasTextValue =
+      target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
+        ? target.value.length > 0
+        : Boolean(target?.textContent);
+
+    if (e.key === "Escape" || (e.key === "Backspace" && !search && !hasTextValue)) {
+      if (e.key === "Backspace" && isTextInput) return;
       e.preventDefault();
       if (mode.type !== "default") {
         // Not at root - navigate back to default
@@ -168,8 +184,20 @@ export function CommandPalette() {
           setMode({ type: "switch-budget" });
           setSearch("");
           break;
+        case "save-budget":
+          setMode({ type: "save-budget" });
+          setSearch("");
+          break;
         case "rename-budget":
           setMode({ type: "rename-budget" });
+          setSearch("");
+          break;
+        case "rename-saved-budget":
+          setMode({ type: "rename-saved-budget" });
+          setSearch("");
+          break;
+        case "delete-saved-budget":
+          setMode({ type: "delete-saved-budget" });
           setSearch("");
           break;
         case "onboarding":
@@ -230,6 +258,7 @@ export function CommandPalette() {
 
   const allItems = getAllItems();
   const hasItems = allItems.length > 0;
+  const hasSavedBudgets = savedBudgets.length > 0;
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
@@ -376,6 +405,14 @@ export function CommandPalette() {
                   {hasItems && (
                     <>
                       <Command.Item
+                        value="Save Budget"
+                        onSelect={() => handleSelect("save-budget")}
+                        className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
+                      >
+                        <Save className="size-4" />
+                        <span className="flex-1">Save Budget…</span>
+                      </Command.Item>
+                      <Command.Item
                         value="Rename Budget"
                         onSelect={() => handleSelect("rename-budget")}
                         className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
@@ -409,6 +446,26 @@ export function CommandPalette() {
                     <FolderOpen className="size-4" />
                     <span className="flex-1">Switch Budget</span>
                   </Command.Item>
+                  {hasSavedBudgets && (
+                    <>
+                      <Command.Item
+                        value="Rename Saved Budget"
+                        onSelect={() => handleSelect("rename-saved-budget")}
+                        className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
+                      >
+                        <Edit2 className="size-4" />
+                        <span className="flex-1">Rename Saved Budget…</span>
+                      </Command.Item>
+                      <Command.Item
+                        value="Delete Saved Budget"
+                        onSelect={() => handleSelect("delete-saved-budget")}
+                        className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-destructive/10 aria-selected:text-destructive"
+                      >
+                        <Trash2 className="size-4" />
+                        <span className="flex-1">Delete Saved Budget…</span>
+                      </Command.Item>
+                    </>
+                  )}
                 </Command.Group>
 
                 {/* Navigate */}
@@ -720,6 +777,42 @@ export function CommandPalette() {
           {mode.type === "rename-budget" && (
             <RenameBudgetView
               key="rename-budget"
+              onCancel={() => setMode({ type: "default" })}
+              onSuccess={() => {
+                setMode({ type: "default" });
+                closePalette();
+              }}
+            />
+          )}
+
+          {/* Save Budget Mode */}
+          {mode.type === "save-budget" && (
+            <SaveBudgetView
+              key="save-budget"
+              onCancel={() => setMode({ type: "default" })}
+              onSuccess={() => {
+                setMode({ type: "default" });
+                closePalette();
+              }}
+            />
+          )}
+
+          {/* Rename Saved Budget Mode */}
+          {mode.type === "rename-saved-budget" && (
+            <RenameSavedBudgetView
+              key="rename-saved-budget"
+              onCancel={() => setMode({ type: "default" })}
+              onSuccess={() => {
+                setMode({ type: "default" });
+                closePalette();
+              }}
+            />
+          )}
+
+          {/* Delete Saved Budget Mode */}
+          {mode.type === "delete-saved-budget" && (
+            <DeleteSavedBudgetView
+              key="delete-saved-budget"
               onCancel={() => setMode({ type: "default" })}
               onSuccess={() => {
                 setMode({ type: "default" });

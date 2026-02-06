@@ -3,7 +3,11 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BudgetProvider, useBudget } from "@/lib/budget-context";
+import {
+  BudgetProvider,
+  CURRENT_BUDGET_STORAGE_KEY,
+  useBudget,
+} from "@/lib/budget-context";
 import { BudgetColumns } from "@/components/budget-columns";
 import { BudgetPieChart } from "@/components/budget-pie-chart";
 import { CategoryBreakdown } from "@/components/category-breakdown";
@@ -35,8 +39,6 @@ import { useDesignLanguage } from "@/lib/design-language-context";
 import { getCategoryColor } from "@/lib/design-language";
 import { hasSkippedOnboarding } from "@/lib/onboarding-gate";
 import { cn } from "@/lib/utils";
-
-const STORAGE_KEY = "budget-planner-data";
 const emptySubscribe = () => () => {};
 
 function useIsHydrated() {
@@ -45,14 +47,15 @@ function useIsHydrated() {
 
 function hasStoredBudgetItems() {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(CURRENT_BUDGET_STORAGE_KEY);
     if (!stored) return false;
 
     const parsed = JSON.parse(stored);
+    const budgetData = parsed?.currentBudget;
     return (["income", "needs", "wants", "savings"] as const).some(
       (category) =>
-        Array.isArray(parsed?.categories?.[category]?.items) &&
-        parsed.categories[category].items.length > 0
+        Array.isArray(budgetData?.categories?.[category]?.items) &&
+        budgetData.categories[category].items.length > 0
     );
   } catch {
     return false;
