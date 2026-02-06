@@ -33,7 +33,7 @@ import { getCategoryColor, getItemizedCategoryPalette } from "@/lib/design-langu
 
 type AssumptionMode = "monthly" | "yearly";
 type BreakdownMode = "itemized" | "category";
-type SeriesKind = "line" | "lineDashed" | "area" | "areaStacked";
+type SeriesKind = "line" | "lineDashed" | "area";
 
 interface ProjectionPoint {
   month: number;
@@ -218,19 +218,27 @@ export function BudgetProjectionCard() {
 
   const series = useMemo<SeriesConfig[]>(() => {
     if (breakdownMode === "category") {
-      return [
+      const categories = [
         {
           dataKey: "needs",
           label: "Needs",
           color: getCategoryColor("needs", designLanguage),
           kind: "area",
+          amount: Math.abs(monthlyNeeds),
         },
         {
           dataKey: "wants",
           label: "Wants",
           color: getCategoryColor("wants", designLanguage),
           kind: "area",
+          amount: Math.abs(monthlyWants),
         },
+      ];
+
+      return [
+        ...categories
+          .sort((a, b) => b.amount - a.amount)
+          .map(({ amount: _amount, ...entry }) => entry),
         {
           dataKey: "savingsWithInterest",
           label: "Savings (With Interest)",
@@ -242,14 +250,13 @@ export function BudgetProjectionCard() {
 
     // Draw larger fills first (behind), smaller fills last (front).
     const itemized = [...itemSeries]
-      .sort((a, b) => b.monthlyAmount - a.monthlyAmount)
+      .sort((a, b) => Math.abs(b.monthlyAmount) - Math.abs(a.monthlyAmount))
       .map<SeriesConfig>((item) => ({
         dataKey: item.key,
         label: item.label,
         color: item.color,
-        kind: "areaStacked",
-        stackId: "itemized-spend",
-        fillOpacity: 0.2,
+        kind: "area",
+        fillOpacity: 0.18,
       }));
 
     itemized.push({
@@ -259,7 +266,7 @@ export function BudgetProjectionCard() {
       kind: "line",
     });
     return itemized;
-  }, [breakdownMode, designLanguage, itemSeries]);
+  }, [breakdownMode, designLanguage, itemSeries, monthlyNeeds, monthlyWants]);
 
   const seriesWithNetWorth = useMemo<SeriesConfig[]>(() => {
     if (!showNetWorth) return series;
@@ -321,13 +328,18 @@ export function BudgetProjectionCard() {
 
     if (!rows.length) return null;
 
+    const netWorthRows = rows.filter((row) => row.key === "netWorthProjection");
+    const sortedRows = rows
+      .filter((row) => row.key !== "netWorthProjection")
+      .sort((a, b) => b.value - a.value);
+
     return (
       <div className="min-w-56 max-w-[22rem] rounded-xl border border-border/80 bg-card/95 px-3 py-2.5 shadow-xl shadow-black/10 backdrop-blur-sm supports-[backdrop-filter]:bg-card/80">
         <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
           {formatProjectionTooltipLabel(label)}
         </p>
         <div className="max-h-64 space-y-1.5 overflow-y-auto pr-1">
-          {rows.map((row) => {
+          {[...sortedRows, ...netWorthRows].map((row) => {
             const isNetWorth = row.label.startsWith("Projected Net Worth");
             return (
               <div
@@ -563,7 +575,7 @@ export function BudgetProjectionCard() {
                           const strokeWidth =
                             entry.dataKey === "savingsWithInterest" ? 3 : isDimmed ? 1.5 : 2.5;
 
-                          if (entry.kind === "area" || entry.kind === "areaStacked") {
+                          if (entry.kind === "area") {
                             return (
                               <Area
                                 key={entry.dataKey}
