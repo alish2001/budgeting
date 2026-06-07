@@ -12,27 +12,47 @@ import {
   type ReactNode,
 } from "react";
 import {
-  BudgetItem,
-  BudgetState,
-  CategoryName,
-  SpendingCategoryName,
-  CATEGORY_CONFIG,
-  TargetPercentages,
-  SerializedBudget,
+  BudgetCategory,
+  BudgetLineItem,
+  BudgetPlan,
+  IncomeItem,
   SavedBudget,
+  SerializedBudgetV3,
+  SpecialSelectionId,
 } from "@/types/budget";
-import { serializeBudget } from "@/lib/budget-serialization";
+import {
+  createCategory,
+  createDefaultPlan,
+  createId,
+  getSortedCategories,
+  getTotalBudgeted,
+  getTotalForCategory,
+  getTotalIncome as selectTotalIncome,
+  hasPlanData,
+  nextIncomeSortOrder,
+  nextItemSortOrder,
+  planFromSerializedV3,
+  serializePlan,
+  serializedV2ToV3,
+} from "@/lib/budget-plan";
 import { generateBudgetName } from "@/lib/budget-storage";
 
-export const CURRENT_BUDGET_STORAGE_KEY = "oversight-current-budget-v2";
-export const SAVED_BUDGETS_STORAGE_KEY = "oversight-saved-budgets-v2";
-export const APP_STATE_META_STORAGE_KEY = "oversight-app-meta-v2";
+// v3 storage keys
+export const CURRENT_PLAN_STORAGE_KEY = "oversight-current-plan-v3";
+export const SAVED_PLANS_STORAGE_KEY = "oversight-saved-plans-v3";
+export const APP_STATE_META_STORAGE_KEY = "oversight-app-meta-v3";
 
-const APP_STATE_VERSION = 2;
+// Legacy v2 keys (read once, then migrated forward)
+const LEGACY_CURRENT_BUDGET_KEY = "oversight-current-budget-v2";
+const LEGACY_SAVED_BUDGETS_KEY = "oversight-saved-budgets-v2";
+
+const APP_STATE_VERSION = 3;
 const PERSIST_DEBOUNCE_MS = 200;
-const ALL_CATEGORIES: CategoryName[] = ["needs", "wants", "savings", "income"];
 
-// Hydration state management using useSyncExternalStore
+// ---------------------------------------------------------------------------
+// Hydration helper
+// ---------------------------------------------------------------------------
+
 const emptySubscribe = () => () => {};
 
 function useIsHydrated() {
@@ -43,156 +63,81 @@ function useIsHydrated() {
   );
 }
 
-interface PersistedCurrentBudgetV2 {
+interface PersistedCurrentPlanV3 {
   version: number;
-  currentBudget: {
-    categories: {
-      needs: { items: BudgetItem[] };
-      wants: { items: BudgetItem[] };
-      savings: { items: BudgetItem[] };
-      income: { items: BudgetItem[] };
-    };
-    targetPercentages: TargetPercentages;
-    currentBudgetName?: string;
-  };
+  currentPlan: BudgetPlan;
 }
 
-interface PersistedSavedBudgetsV2 {
+interface PersistedSavedPlansV3 {
   version: number;
   savedBudgets: SavedBudget[];
 }
 
-interface PersistedMetaV2 {
+interface PersistedMetaV3 {
   version: number;
   revision: number;
   updatedAt: string;
 }
 
 interface BudgetStoreState {
-  currentBudget: BudgetState;
+  currentPlan: BudgetPlan;
   savedBudgets: SavedBudget[];
   revision: number;
 }
 
+// ---------------------------------------------------------------------------
+// Actions
+// ---------------------------------------------------------------------------
+
 type BudgetAction =
   | { type: "HYDRATE"; storeState: BudgetStoreState }
-  | { type: "ADD_ITEM"; category: CategoryName; item: BudgetItem }
-  | { type: "REMOVE_ITEM"; category: CategoryName; itemId: string }
-  | { type: "UPDATE_ITEM"; category: CategoryName; item: BudgetItem }
-  | {
-      type: "SET_SELECTED_CATEGORY";
-      category: CategoryName | "unbudgeted" | null;
-    }
-  | {
-      type: "UPDATE_TARGET_PERCENTAGES";
-      targets: TargetPercentages;
-    }
+  | { type: "ADD_INCOME_ITEM"; item: IncomeItem }
+  | { type: "UPDATE_INCOME_ITEM"; id: string; label: string; amount: number }
+  | { type: "REMOVE_INCOME_ITEM"; id: string }
+  | { type: "ADD_CATEGORY"; category: BudgetCategory }
+  | { type: "RENAME_CATEGORY"; categoryId: string; name: string }
+  | { type: "UPDATE_CATEGORY_TARGET"; categoryId: string; targetPercentage: number }
+  | { type: "SET_CATEGORY_TARGETS"; targets: Record<string, number> }
+  | { type: "DELETE_CATEGORY"; categoryId: string; behavior: "keep" | "delete" }
+  | { type: "REORDER_CATEGORIES"; orderedCategoryIds: string[] }
+  | { type: "ADD_BUDGET_ITEM"; item: BudgetLineItem }
+  | { type: "UPDATE_BUDGET_ITEM"; id: string; label: string; amount: number }
+  | { type: "REMOVE_BUDGET_ITEM"; id: string }
+  | { type: "MOVE_BUDGET_ITEM"; id: string; categoryId: string | null; index?: number }
+  | { type: "SET_SELECTED_CATEGORY"; categoryId: string | SpecialSelectionId | null }
   | { type: "CLEAR_ALL" }
-  | { type: "IMPORT_BUDGET"; data: SerializedBudget }
+  | { type: "IMPORT_PLAN"; plan: BudgetPlan }
   | { type: "SET_CURRENT_BUDGET_NAME"; name: string | undefined }
   | { type: "SAVE_CURRENT_BUDGET"; budget: SavedBudget; budgetName: string }
   | { type: "LOAD_SAVED_BUDGET"; budgetId: string }
   | { type: "RENAME_SAVED_BUDGET"; budget: SavedBudget }
   | { type: "DELETE_SAVED_BUDGET"; budgetId: string };
 
-function createInitialBudgetState(): BudgetState {
-  return {
-    categories: {
-      needs: {
-        name: "needs",
-        targetPercentage: CATEGORY_CONFIG.needs.targetPercentage,
-        items: [],
-        color: CATEGORY_CONFIG.needs.color,
-      },
-      wants: {
-        name: "wants",
-        targetPercentage: CATEGORY_CONFIG.wants.targetPercentage,
-        items: [],
-        color: CATEGORY_CONFIG.wants.color,
-      },
-      savings: {
-        name: "savings",
-        targetPercentage: CATEGORY_CONFIG.savings.targetPercentage,
-        items: [],
-        color: CATEGORY_CONFIG.savings.color,
-      },
-      income: {
-        name: "income",
-        targetPercentage: CATEGORY_CONFIG.income.targetPercentage,
-        items: [],
-        color: CATEGORY_CONFIG.income.color,
-      },
-    },
-    targetPercentages: {
-      needs: CATEGORY_CONFIG.needs.targetPercentage,
-      wants: CATEGORY_CONFIG.wants.targetPercentage,
-      savings: CATEGORY_CONFIG.savings.targetPercentage,
-    },
-    selectedCategory: null,
-  };
-}
+// ---------------------------------------------------------------------------
+// Initial state
+// ---------------------------------------------------------------------------
 
 function createInitialStoreState(): BudgetStoreState {
   return {
-    currentBudget: createInitialBudgetState(),
+    currentPlan: createDefaultPlan(),
     savedBudgets: [],
     revision: 0,
   };
 }
 
-function createBudgetStateFromSerialized(
-  data: SerializedBudget,
-  currentBudgetName?: string,
-): BudgetState {
-  const initial = createInitialBudgetState();
-
-  const categories = ALL_CATEGORIES.reduce(
-    (acc, category) => {
-      acc[category] = {
-        ...initial.categories[category],
-        items: (data.items[category] || []).map((item) => ({
-          id: crypto.randomUUID(),
-          label: item.label,
-          amount: item.amount,
-        })),
-      };
-      return acc;
-    },
-    {} as BudgetState["categories"],
-  );
-
-  return {
-    ...initial,
-    categories,
-    targetPercentages: data.targets || {
-      needs: CATEGORY_CONFIG.needs.targetPercentage,
-      wants: CATEGORY_CONFIG.wants.targetPercentage,
-      savings: CATEGORY_CONFIG.savings.targetPercentage,
-    },
-    currentBudgetName,
-    selectedCategory: null,
-  };
-}
-
 function getBudgetNameOrDefault(name: string | undefined, fallback?: string): string {
   const trimmed = typeof name === "string" ? name.trim() : "";
-  if (trimmed) {
-    return trimmed;
-  }
+  if (trimmed) return trimmed;
 
   const fallbackTrimmed = typeof fallback === "string" ? fallback.trim() : "";
-  if (fallbackTrimmed) {
-    return fallbackTrimmed;
-  }
+  if (fallbackTrimmed) return fallbackTrimmed;
 
   return generateBudgetName();
 }
 
-function hasCurrentBudgetItems(currentBudget: BudgetState): boolean {
-  return ALL_CATEGORIES.some(
-    (category) => currentBudget.categories[category].items.length > 0,
-  );
-}
+// ---------------------------------------------------------------------------
+// Normalization / parsing
+// ---------------------------------------------------------------------------
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -202,166 +147,185 @@ function normalizeIsoDate(dateString: unknown, fallbackIso: string): string {
   if (typeof dateString === "string" && !Number.isNaN(Date.parse(dateString))) {
     return dateString;
   }
-
   return fallbackIso;
 }
 
-function normalizeBudgetAmount(amount: unknown): number | null {
+function normalizeAmount(amount: unknown): number | null {
   if (typeof amount !== "number" || !Number.isFinite(amount) || amount < 0) {
     return null;
   }
-
   return amount;
 }
 
-function normalizeBudgetItem(value: unknown): BudgetItem | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  const label = typeof value.label === "string" ? value.label.trim() : "";
-  const amount = normalizeBudgetAmount(value.amount);
-
-  if (!label || amount === null) {
-    return null;
-  }
-
-  const id = typeof value.id === "string" && value.id.trim() ? value.id : crypto.randomUUID();
-
-  return {
-    id,
-    label,
-    amount,
-  };
+function normalizeLabel(label: unknown): string {
+  return typeof label === "string" ? label.trim() : "";
 }
 
-function normalizeTargetPercentages(value: unknown): TargetPercentages {
-  if (!isRecord(value)) {
-    return {
-      needs: CATEGORY_CONFIG.needs.targetPercentage,
-      wants: CATEGORY_CONFIG.wants.targetPercentage,
-      savings: CATEGORY_CONFIG.savings.targetPercentage,
-    };
-  }
-
-  const needs =
-    typeof value.needs === "number" && Number.isFinite(value.needs)
-      ? value.needs
-      : CATEGORY_CONFIG.needs.targetPercentage;
-  const wants =
-    typeof value.wants === "number" && Number.isFinite(value.wants)
-      ? value.wants
-      : CATEGORY_CONFIG.wants.targetPercentage;
-  const savings =
-    typeof value.savings === "number" && Number.isFinite(value.savings)
-      ? value.savings
-      : CATEGORY_CONFIG.savings.targetPercentage;
-
-  return { needs, wants, savings };
-}
-
-function normalizeCurrentBudget(value: unknown): BudgetState | null {
-  if (!isRecord(value) || !isRecord(value.categories)) {
+function normalizePlan(value: unknown): BudgetPlan | null {
+  if (!isRecord(value)) return null;
+  if (!Array.isArray(value.categories) || !Array.isArray(value.budgetItems)) {
     return null;
   }
 
-  const initial = createInitialBudgetState();
-  const categoriesSource = value.categories as Record<string, unknown>;
+  const now = new Date().toISOString();
+  const knownCategoryIds = new Set<string>();
 
-  const categories = ALL_CATEGORIES.reduce(
-    (acc, category) => {
-      const categoryValue = categoriesSource[category];
-      const categoryData = isRecord(categoryValue)
-        ? categoryValue
-        : null;
-      const items = Array.isArray(categoryData?.items)
-        ? categoryData.items
-            .map(normalizeBudgetItem)
-            .filter((item): item is BudgetItem => item !== null)
-        : [];
-
-      acc[category] = {
-        ...initial.categories[category],
-        items,
+  const categories: BudgetCategory[] = value.categories
+    .map((raw, index): BudgetCategory | null => {
+      if (!isRecord(raw)) return null;
+      const id =
+        typeof raw.id === "string" && raw.id.trim() ? raw.id : createId();
+      const name = normalizeLabel(raw.name) || "Category";
+      const targetPercentage =
+        typeof raw.targetPercentage === "number" &&
+        Number.isFinite(raw.targetPercentage)
+          ? raw.targetPercentage
+          : 0;
+      const colorToken =
+        typeof raw.colorToken === "string" && raw.colorToken.trim()
+          ? raw.colorToken
+          : "#64748b";
+      const sortOrder =
+        typeof raw.sortOrder === "number" && Number.isFinite(raw.sortOrder)
+          ? raw.sortOrder
+          : index;
+      knownCategoryIds.add(id);
+      return {
+        id,
+        name,
+        targetPercentage,
+        colorToken,
+        sortOrder,
+        parentCategoryId:
+          typeof raw.parentCategoryId === "string" ? raw.parentCategoryId : null,
+        isDefault: raw.isDefault === true,
+        createdAt: normalizeIsoDate(raw.createdAt, now),
+        updatedAt: normalizeIsoDate(raw.updatedAt, now),
       };
-      return acc;
-    },
-    {} as BudgetState["categories"],
-  );
+    })
+    .filter((category): category is BudgetCategory => category !== null);
 
-  const currentBudgetName =
-    typeof value.currentBudgetName === "string" && value.currentBudgetName.trim()
-      ? value.currentBudgetName.trim()
+  const budgetItems: BudgetLineItem[] = value.budgetItems
+    .map((raw, index): BudgetLineItem | null => {
+      if (!isRecord(raw)) return null;
+      const label = normalizeLabel(raw.label);
+      const amount = normalizeAmount(raw.amount);
+      if (!label || amount === null) return null;
+      const categoryId =
+        typeof raw.categoryId === "string" && knownCategoryIds.has(raw.categoryId)
+          ? raw.categoryId
+          : null;
+      return {
+        id: typeof raw.id === "string" && raw.id.trim() ? raw.id : createId(),
+        label,
+        amount,
+        categoryId,
+        sortOrder:
+          typeof raw.sortOrder === "number" && Number.isFinite(raw.sortOrder)
+            ? raw.sortOrder
+            : index,
+      };
+    })
+    .filter((item): item is BudgetLineItem => item !== null);
+
+  const incomeItems: IncomeItem[] = Array.isArray(value.incomeItems)
+    ? value.incomeItems
+        .map((raw, index): IncomeItem | null => {
+          if (!isRecord(raw)) return null;
+          const label = normalizeLabel(raw.label);
+          const amount = normalizeAmount(raw.amount);
+          if (!label || amount === null) return null;
+          return {
+            id: typeof raw.id === "string" && raw.id.trim() ? raw.id : createId(),
+            label,
+            amount,
+            sortOrder:
+              typeof raw.sortOrder === "number" && Number.isFinite(raw.sortOrder)
+                ? raw.sortOrder
+                : index,
+          };
+        })
+        .filter((item): item is IncomeItem => item !== null)
+    : [];
+
+  const settingsBehavior =
+    isRecord(value.settings) && value.settings.unassignedBehavior === "delete"
+      ? "delete"
+      : "keep";
+
+  const name =
+    typeof value.name === "string" && value.name.trim()
+      ? value.name.trim()
       : undefined;
 
   return {
-    ...initial,
+    id: typeof value.id === "string" && value.id.trim() ? value.id : createId(),
+    name,
+    schemaVersion: 3,
+    incomeItems,
     categories,
-    targetPercentages: normalizeTargetPercentages(value.targetPercentages),
-    currentBudgetName,
-    selectedCategory: null,
+    budgetItems,
+    settings: { unassignedBehavior: settingsBehavior },
+    selectedCategoryId: null,
+    createdAt: normalizeIsoDate(value.createdAt, now),
+    updatedAt: normalizeIsoDate(value.updatedAt, now),
   };
 }
 
-function normalizeSerializedBudget(value: unknown): SerializedBudget | null {
-  if (!isRecord(value) || !isRecord(value.items)) {
+function normalizeSerializedV3(value: unknown): SerializedBudgetV3 | null {
+  if (!isRecord(value) || value.version !== 3) return null;
+  if (!Array.isArray(value.income) || !Array.isArray(value.categories)) {
     return null;
   }
 
-  const items = {
-    needs: [] as SerializedBudget["items"]["needs"],
-    wants: [] as SerializedBudget["items"]["wants"],
-    savings: [] as SerializedBudget["items"]["savings"],
-    income: [] as SerializedBudget["items"]["income"],
-  };
-
-  for (const category of ALL_CATEGORIES) {
-    const rawItems = value.items[category];
-    if (!Array.isArray(rawItems)) {
-      continue;
-    }
-
-    items[category] = rawItems
-      .map((item): { label: string; amount: number } | null => {
-        if (!isRecord(item)) {
-          return null;
-        }
-
-        const label = typeof item.label === "string" ? item.label.trim() : "";
-        const amount = normalizeBudgetAmount(item.amount);
-        if (!label || amount === null) {
-          return null;
-        }
-
-        return { label, amount };
-      })
-      .filter((item): item is { label: string; amount: number } => item !== null);
-  }
-
-  const targets = isRecord(value.targets)
-    ? normalizeTargetPercentages(value.targets)
-    : undefined;
+  const cleanItems = (raw: unknown) =>
+    Array.isArray(raw)
+      ? raw
+          .map((item) => {
+            if (!isRecord(item)) return null;
+            const label = normalizeLabel(item.label);
+            const amount = normalizeAmount(item.amount);
+            if (!label || amount === null) return null;
+            return { label, amount };
+          })
+          .filter((item): item is { label: string; amount: number } => item !== null)
+      : [];
 
   return {
-    items,
-    ...(targets ? { targets } : {}),
+    version: 3,
+    name:
+      typeof value.name === "string" && value.name.trim()
+        ? value.name.trim()
+        : undefined,
+    income: cleanItems(value.income),
+    categories: (value.categories as unknown[])
+      .map((raw) => {
+        if (!isRecord(raw)) return null;
+        return {
+          name: normalizeLabel(raw.name) || "Category",
+          targetPercentage:
+            typeof raw.targetPercentage === "number" &&
+            Number.isFinite(raw.targetPercentage)
+              ? raw.targetPercentage
+              : 0,
+          items: cleanItems(raw.items),
+        };
+      })
+      .filter((category): category is SerializedBudgetV3["categories"][number] => category !== null),
+    unassigned: value.unassigned ? cleanItems(value.unassigned) : undefined,
   };
 }
 
 function normalizeSavedBudget(value: unknown): SavedBudget | null {
-  if (!isRecord(value)) {
-    return null;
-  }
+  if (!isRecord(value)) return null;
 
-  const data = normalizeSerializedBudget(value.data);
-  if (!data) {
-    return null;
-  }
+  const data = normalizeSerializedV3(value.data);
+  if (!data) return null;
 
   const nowIso = new Date().toISOString();
 
   return {
-    id: typeof value.id === "string" && value.id.trim() ? value.id : crypto.randomUUID(),
+    id: typeof value.id === "string" && value.id.trim() ? value.id : createId(),
     name: getBudgetNameOrDefault(
       typeof value.name === "string" ? value.name : undefined,
       undefined,
@@ -372,38 +336,150 @@ function normalizeSavedBudget(value: unknown): SavedBudget | null {
   };
 }
 
-function parsePersistedCurrentBudget(raw: string | null): BudgetState | null {
-  if (!raw) {
-    return null;
-  }
+// ---------------------------------------------------------------------------
+// Legacy v2 migration
+// ---------------------------------------------------------------------------
 
+function migrateLegacyCurrentBudget(raw: string | null): BudgetPlan | null {
+  if (!raw) return null;
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (!isRecord(parsed) || parsed.version !== APP_STATE_VERSION) {
-      return null;
-    }
+    if (!isRecord(parsed) || !isRecord(parsed.currentBudget)) return null;
+    const budget = parsed.currentBudget as Record<string, unknown>;
+    const categories = isRecord(budget.categories) ? budget.categories : {};
 
-    return normalizeCurrentBudget(parsed.currentBudget);
+    const pickItems = (key: string) => {
+      const cat = (categories as Record<string, unknown>)[key];
+      const items = isRecord(cat) && Array.isArray(cat.items) ? cat.items : [];
+      return items
+        .map((item) => {
+          if (!isRecord(item)) return null;
+          const label = normalizeLabel(item.label);
+          const amount = normalizeAmount(item.amount);
+          if (!label || amount === null) return null;
+          return { label, amount };
+        })
+        .filter((item): item is { label: string; amount: number } => item !== null);
+    };
+
+    const targets = isRecord(budget.targetPercentages)
+      ? budget.targetPercentages
+      : {};
+    const targetFor = (key: string, fallback: number) =>
+      typeof (targets as Record<string, unknown>)[key] === "number"
+        ? ((targets as Record<string, number>)[key] as number)
+        : fallback;
+
+    const serialized: SerializedBudgetV3 = serializedV2ToV3({
+      items: {
+        needs: pickItems("needs"),
+        wants: pickItems("wants"),
+        savings: pickItems("savings"),
+        income: pickItems("income"),
+      },
+      targets: {
+        needs: targetFor("needs", 50),
+        wants: targetFor("wants", 30),
+        savings: targetFor("savings", 20),
+      },
+    });
+
+    const plan = planFromSerializedV3(serialized);
+    const name =
+      typeof budget.currentBudgetName === "string" && budget.currentBudgetName.trim()
+        ? budget.currentBudgetName.trim()
+        : undefined;
+    plan.name = name;
+    return plan;
   } catch {
     return null;
   }
 }
 
-function parsePersistedSavedBudgets(raw: string | null): SavedBudget[] | null {
-  if (!raw) {
-    return null;
-  }
-
+function migrateLegacySavedBudgets(raw: string | null): SavedBudget[] {
+  if (!raw) return [];
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (!isRecord(parsed) || parsed.version !== APP_STATE_VERSION) {
-      return null;
-    }
+    if (!isRecord(parsed) || !Array.isArray(parsed.savedBudgets)) return [];
 
-    if (!Array.isArray(parsed.savedBudgets)) {
-      return [];
-    }
+    return parsed.savedBudgets
+      .map((value): SavedBudget | null => {
+        if (!isRecord(value) || !isRecord(value.data)) return null;
+        const legacyData = value.data as Record<string, unknown>;
+        if (!isRecord(legacyData.items)) return null;
+        const items = legacyData.items as Record<string, unknown>;
 
+        const pick = (key: string) =>
+          Array.isArray(items[key])
+            ? (items[key] as unknown[])
+                .map((item) => {
+                  if (!isRecord(item)) return null;
+                  const label = normalizeLabel(item.label);
+                  const amount = normalizeAmount(item.amount);
+                  if (!label || amount === null) return null;
+                  return { label, amount };
+                })
+                .filter((item): item is { label: string; amount: number } => item !== null)
+            : [];
+
+        const legacyTargets = isRecord(legacyData.targets)
+          ? (legacyData.targets as Record<string, unknown>)
+          : null;
+        const targetFor = (key: string, fallback: number) =>
+          legacyTargets && typeof legacyTargets[key] === "number"
+            ? (legacyTargets[key] as number)
+            : fallback;
+
+        const data = serializedV2ToV3({
+          items: {
+            needs: pick("needs"),
+            wants: pick("wants"),
+            savings: pick("savings"),
+            income: pick("income"),
+          },
+          targets: legacyTargets
+            ? {
+                needs: targetFor("needs", 50),
+                wants: targetFor("wants", 30),
+                savings: targetFor("savings", 20),
+              }
+            : undefined,
+        });
+
+        const nowIso = new Date().toISOString();
+        return {
+          id: typeof value.id === "string" && value.id.trim() ? value.id : createId(),
+          name: getBudgetNameOrDefault(
+            typeof value.name === "string" ? value.name : undefined,
+          ),
+          createdAt: normalizeIsoDate(value.createdAt, nowIso),
+          lastModifiedAt: normalizeIsoDate(value.lastModifiedAt, nowIso),
+          data,
+        };
+      })
+      .filter((budget): budget is SavedBudget => budget !== null);
+  } catch {
+    return [];
+  }
+}
+
+function parsePersistedCurrentPlan(raw: string | null): BudgetPlan | null {
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed) || parsed.version !== APP_STATE_VERSION) return null;
+    return normalizePlan(parsed.currentPlan);
+  } catch {
+    return null;
+  }
+}
+
+function parsePersistedSavedPlans(raw: string | null): SavedBudget[] | null {
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed) || parsed.version !== APP_STATE_VERSION) return null;
+    if (!Array.isArray(parsed.savedBudgets)) return [];
     return parsed.savedBudgets
       .map(normalizeSavedBudget)
       .filter((budget): budget is SavedBudget => budget !== null);
@@ -412,84 +488,78 @@ function parsePersistedSavedBudgets(raw: string | null): SavedBudget[] | null {
   }
 }
 
-function parsePersistedMeta(raw: string | null): PersistedMetaV2 | null {
-  if (!raw) {
-    return null;
-  }
-
+function parsePersistedMeta(raw: string | null): PersistedMetaV3 | null {
+  if (!raw) return null;
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (!isRecord(parsed) || parsed.version !== APP_STATE_VERSION) {
-      return null;
-    }
+    if (!isRecord(parsed) || parsed.version !== APP_STATE_VERSION) return null;
 
     const revision =
-      typeof parsed.revision === "number" && Number.isInteger(parsed.revision) && parsed.revision >= 0
+      typeof parsed.revision === "number" &&
+      Number.isInteger(parsed.revision) &&
+      parsed.revision >= 0
         ? parsed.revision
         : null;
-
-    if (revision === null) {
-      return null;
-    }
+    if (revision === null) return null;
 
     const updatedAt =
-      typeof parsed.updatedAt === "string" && !Number.isNaN(Date.parse(parsed.updatedAt))
+      typeof parsed.updatedAt === "string" &&
+      !Number.isNaN(Date.parse(parsed.updatedAt))
         ? parsed.updatedAt
         : new Date().toISOString();
 
-    return {
-      version: APP_STATE_VERSION,
-      revision,
-      updatedAt,
-    };
+    return { version: APP_STATE_VERSION, revision, updatedAt };
   } catch {
     return null;
   }
 }
 
 function loadStoreFromStorage(): BudgetStoreState {
-  const currentBudget =
-    parsePersistedCurrentBudget(window.localStorage.getItem(CURRENT_BUDGET_STORAGE_KEY)) ||
-    createInitialBudgetState();
-  const savedBudgets =
-    parsePersistedSavedBudgets(window.localStorage.getItem(SAVED_BUDGETS_STORAGE_KEY)) || [];
-  const meta = parsePersistedMeta(window.localStorage.getItem(APP_STATE_META_STORAGE_KEY));
+  // 1. Prefer v3 data.
+  let currentPlan = parsePersistedCurrentPlan(
+    window.localStorage.getItem(CURRENT_PLAN_STORAGE_KEY),
+  );
+  let savedBudgets = parsePersistedSavedPlans(
+    window.localStorage.getItem(SAVED_PLANS_STORAGE_KEY),
+  );
 
-  if (hasCurrentBudgetItems(currentBudget) && !currentBudget.currentBudgetName) {
-    currentBudget.currentBudgetName = generateBudgetName();
+  // 2. Fall back to migrating legacy v2 data.
+  if (!currentPlan) {
+    currentPlan =
+      migrateLegacyCurrentBudget(
+        window.localStorage.getItem(LEGACY_CURRENT_BUDGET_KEY),
+      ) || createDefaultPlan();
+  }
+  if (savedBudgets === null) {
+    savedBudgets = migrateLegacySavedBudgets(
+      window.localStorage.getItem(LEGACY_SAVED_BUDGETS_KEY),
+    );
+  }
+
+  const meta = parsePersistedMeta(
+    window.localStorage.getItem(APP_STATE_META_STORAGE_KEY),
+  );
+
+  if (hasPlanData(currentPlan) && !currentPlan.name) {
+    currentPlan.name = generateBudgetName();
   }
 
   return {
-    currentBudget,
+    currentPlan,
     savedBudgets,
     revision: meta?.revision ?? 0,
   };
 }
 
-function toPersistedCurrentBudget(currentBudget: BudgetState): PersistedCurrentBudgetV2 {
-  return {
-    version: APP_STATE_VERSION,
-    currentBudget: {
-      categories: {
-        needs: { items: currentBudget.categories.needs.items },
-        wants: { items: currentBudget.categories.wants.items },
-        savings: { items: currentBudget.categories.savings.items },
-        income: { items: currentBudget.categories.income.items },
-      },
-      targetPercentages: currentBudget.targetPercentages,
-      currentBudgetName: currentBudget.currentBudgetName,
-    },
-  };
+function toPersistedCurrentPlan(currentPlan: BudgetPlan): PersistedCurrentPlanV3 {
+  return { version: APP_STATE_VERSION, currentPlan };
 }
 
-function toPersistedSavedBudgets(savedBudgets: SavedBudget[]): PersistedSavedBudgetsV2 {
-  return {
-    version: APP_STATE_VERSION,
-    savedBudgets,
-  };
+function toPersistedSavedPlans(savedBudgets: SavedBudget[]): PersistedSavedPlansV3 {
+  return { version: APP_STATE_VERSION, savedBudgets };
 }
 
-function toPersistedMeta(revision: number): PersistedMetaV2 {
+function toPersistedMeta(revision: number): PersistedMetaV3 {
   return {
     version: APP_STATE_VERSION,
     revision,
@@ -497,122 +567,251 @@ function toPersistedMeta(revision: number): PersistedMetaV2 {
   };
 }
 
+/** Lightweight check used by route guards without spinning up the provider. */
+export function readStoredPlanHasData(): boolean {
+  try {
+    const v3 = parsePersistedCurrentPlan(
+      window.localStorage.getItem(CURRENT_PLAN_STORAGE_KEY),
+    );
+    if (v3) return hasPlanData(v3);
+
+    const legacy = migrateLegacyCurrentBudget(
+      window.localStorage.getItem(LEGACY_CURRENT_BUDGET_KEY),
+    );
+    return legacy ? hasPlanData(legacy) : false;
+  } catch {
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Reducer helpers
+// ---------------------------------------------------------------------------
+
+function withPlan(
+  state: BudgetStoreState,
+  updater: (plan: BudgetPlan) => BudgetPlan,
+): BudgetStoreState {
+  return {
+    ...state,
+    currentPlan: { ...updater(state.currentPlan), updatedAt: new Date().toISOString() },
+    revision: state.revision + 1,
+  };
+}
+
+function reindex<T extends { sortOrder: number }>(items: T[]): T[] {
+  return items.map((item, index) => ({ ...item, sortOrder: index }));
+}
+
+// ---------------------------------------------------------------------------
+// Reducer
+// ---------------------------------------------------------------------------
+
 function budgetReducer(state: BudgetStoreState, action: BudgetAction): BudgetStoreState {
   switch (action.type) {
     case "HYDRATE":
       return action.storeState;
-    case "ADD_ITEM":
-      return {
-        ...state,
-        currentBudget: {
-          ...state.currentBudget,
-          categories: {
-            ...state.currentBudget.categories,
-            [action.category]: {
-              ...state.currentBudget.categories[action.category],
-              items: [...state.currentBudget.categories[action.category].items, action.item],
-            },
-          },
-        },
-        revision: state.revision + 1,
-      };
-    case "REMOVE_ITEM":
-      return {
-        ...state,
-        currentBudget: {
-          ...state.currentBudget,
-          categories: {
-            ...state.currentBudget.categories,
-            [action.category]: {
-              ...state.currentBudget.categories[action.category],
-              items: state.currentBudget.categories[action.category].items.filter(
-                (item) => item.id !== action.itemId,
-              ),
-            },
-          },
-        },
-        revision: state.revision + 1,
-      };
-    case "UPDATE_ITEM":
-      return {
-        ...state,
-        currentBudget: {
-          ...state.currentBudget,
-          categories: {
-            ...state.currentBudget.categories,
-            [action.category]: {
-              ...state.currentBudget.categories[action.category],
-              items: state.currentBudget.categories[action.category].items.map((item) =>
-                item.id === action.item.id ? action.item : item,
-              ),
-            },
-          },
-        },
-        revision: state.revision + 1,
-      };
+
+    case "ADD_INCOME_ITEM":
+      return withPlan(state, (plan) => ({
+        ...plan,
+        incomeItems: [...plan.incomeItems, action.item],
+      }));
+
+    case "UPDATE_INCOME_ITEM":
+      return withPlan(state, (plan) => ({
+        ...plan,
+        incomeItems: plan.incomeItems.map((item) =>
+          item.id === action.id
+            ? { ...item, label: action.label, amount: action.amount }
+            : item,
+        ),
+      }));
+
+    case "REMOVE_INCOME_ITEM":
+      return withPlan(state, (plan) => ({
+        ...plan,
+        incomeItems: plan.incomeItems.filter((item) => item.id !== action.id),
+      }));
+
+    case "ADD_CATEGORY":
+      return withPlan(state, (plan) => ({
+        ...plan,
+        categories: [...plan.categories, action.category],
+      }));
+
+    case "RENAME_CATEGORY":
+      return withPlan(state, (plan) => ({
+        ...plan,
+        categories: plan.categories.map((category) =>
+          category.id === action.categoryId
+            ? { ...category, name: action.name, updatedAt: new Date().toISOString() }
+            : category,
+        ),
+      }));
+
+    case "UPDATE_CATEGORY_TARGET":
+      return withPlan(state, (plan) => ({
+        ...plan,
+        categories: plan.categories.map((category) =>
+          category.id === action.categoryId
+            ? { ...category, targetPercentage: action.targetPercentage }
+            : category,
+        ),
+      }));
+
+    case "SET_CATEGORY_TARGETS":
+      return withPlan(state, (plan) => ({
+        ...plan,
+        categories: plan.categories.map((category) =>
+          action.targets[category.id] !== undefined
+            ? { ...category, targetPercentage: action.targets[category.id] }
+            : category,
+        ),
+      }));
+
+    case "DELETE_CATEGORY":
+      return withPlan(state, (plan) => {
+        const remainingCategories = reindex(
+          getSortedCategories(plan).filter(
+            (category) => category.id !== action.categoryId,
+          ),
+        );
+        const budgetItems =
+          action.behavior === "delete"
+            ? plan.budgetItems.filter((item) => item.categoryId !== action.categoryId)
+            : plan.budgetItems.map((item) =>
+                item.categoryId === action.categoryId
+                  ? { ...item, categoryId: null }
+                  : item,
+              );
+        return { ...plan, categories: remainingCategories, budgetItems };
+      });
+
+    case "REORDER_CATEGORIES":
+      return withPlan(state, (plan) => {
+        const orderMap = new Map(
+          action.orderedCategoryIds.map((id, index) => [id, index]),
+        );
+        return {
+          ...plan,
+          categories: plan.categories.map((category) => ({
+            ...category,
+            sortOrder: orderMap.has(category.id)
+              ? (orderMap.get(category.id) as number)
+              : category.sortOrder,
+          })),
+        };
+      });
+
+    case "ADD_BUDGET_ITEM":
+      return withPlan(state, (plan) => ({
+        ...plan,
+        budgetItems: [...plan.budgetItems, action.item],
+      }));
+
+    case "UPDATE_BUDGET_ITEM":
+      return withPlan(state, (plan) => ({
+        ...plan,
+        budgetItems: plan.budgetItems.map((item) =>
+          item.id === action.id
+            ? { ...item, label: action.label, amount: action.amount }
+            : item,
+        ),
+      }));
+
+    case "REMOVE_BUDGET_ITEM":
+      return withPlan(state, (plan) => ({
+        ...plan,
+        budgetItems: plan.budgetItems.filter((item) => item.id !== action.id),
+      }));
+
+    case "MOVE_BUDGET_ITEM":
+      return withPlan(state, (plan) => {
+        const moving = plan.budgetItems.find((item) => item.id === action.id);
+        if (!moving) return plan;
+
+        const targetItems = plan.budgetItems
+          .filter(
+            (item) => item.categoryId === action.categoryId && item.id !== action.id,
+          )
+          .sort((a, b) => a.sortOrder - b.sortOrder);
+
+        const insertIndex =
+          action.index === undefined
+            ? targetItems.length
+            : Math.max(0, Math.min(action.index, targetItems.length));
+
+        const updatedMoving: BudgetLineItem = {
+          ...moving,
+          categoryId: action.categoryId,
+        };
+
+        const reordered = [
+          ...targetItems.slice(0, insertIndex),
+          updatedMoving,
+          ...targetItems.slice(insertIndex),
+        ].map((item, index) => ({ ...item, sortOrder: index }));
+
+        const reorderedIds = new Set(reordered.map((item) => item.id));
+
+        return {
+          ...plan,
+          budgetItems: [
+            ...plan.budgetItems.filter(
+              (item) => item.id !== action.id && !reorderedIds.has(item.id),
+            ),
+            ...reordered,
+          ],
+        };
+      });
+
     case "SET_SELECTED_CATEGORY":
       return {
         ...state,
-        currentBudget: {
-          ...state.currentBudget,
-          selectedCategory: action.category,
-        },
+        currentPlan: { ...state.currentPlan, selectedCategoryId: action.categoryId },
       };
-    case "UPDATE_TARGET_PERCENTAGES":
-      return {
-        ...state,
-        currentBudget: {
-          ...state.currentBudget,
-          targetPercentages: action.targets,
-        },
-        revision: state.revision + 1,
-      };
+
     case "CLEAR_ALL":
       return {
         ...state,
-        currentBudget: createInitialBudgetState(),
+        currentPlan: createDefaultPlan(),
         revision: state.revision + 1,
       };
-    case "IMPORT_BUDGET":
+
+    case "IMPORT_PLAN":
       return {
         ...state,
-        currentBudget: createBudgetStateFromSerialized(
-          action.data,
-          state.currentBudget.currentBudgetName,
-        ),
-        revision: state.revision + 1,
-      };
-    case "SET_CURRENT_BUDGET_NAME":
-      return {
-        ...state,
-        currentBudget: {
-          ...state.currentBudget,
-          currentBudgetName: action.name,
+        currentPlan: {
+          ...action.plan,
+          name: action.plan.name ?? state.currentPlan.name,
         },
         revision: state.revision + 1,
       };
+
+    case "SET_CURRENT_BUDGET_NAME":
+      return withPlan(state, (plan) => ({ ...plan, name: action.name }));
+
     case "SAVE_CURRENT_BUDGET":
       return {
         ...state,
-        currentBudget: {
-          ...state.currentBudget,
-          currentBudgetName: action.budgetName,
-        },
+        currentPlan: { ...state.currentPlan, name: action.budgetName },
         savedBudgets: [action.budget, ...state.savedBudgets],
         revision: state.revision + 1,
       };
+
     case "LOAD_SAVED_BUDGET": {
       const budget = state.savedBudgets.find((item) => item.id === action.budgetId);
-      if (!budget) {
-        return state;
-      }
-
+      if (!budget) return state;
+      const plan = planFromSerializedV3(budget.data);
+      plan.name = budget.name;
       return {
         ...state,
-        currentBudget: createBudgetStateFromSerialized(budget.data, budget.name),
+        currentPlan: plan,
         revision: state.revision + 1,
       };
     }
+
     case "RENAME_SAVED_BUDGET":
       return {
         ...state,
@@ -621,37 +820,62 @@ function budgetReducer(state: BudgetStoreState, action: BudgetAction): BudgetSto
         ),
         revision: state.revision + 1,
       };
+
     case "DELETE_SAVED_BUDGET":
       return {
         ...state,
-        savedBudgets: state.savedBudgets.filter((budget) => budget.id !== action.budgetId),
+        savedBudgets: state.savedBudgets.filter(
+          (budget) => budget.id !== action.budgetId,
+        ),
         revision: state.revision + 1,
       };
+
     default:
       return state;
   }
 }
 
+// ---------------------------------------------------------------------------
+// Context
+// ---------------------------------------------------------------------------
+
 interface BudgetContextType {
-  state: BudgetState;
+  state: BudgetPlan;
   savedBudgets: SavedBudget[];
   isHydrated: boolean;
-  addItem: (category: CategoryName, label: string, amount: number) => void;
-  removeItem: (category: CategoryName, itemId: string) => void;
-  updateItem: (category: CategoryName, item: BudgetItem) => void;
-  setSelectedCategory: (category: CategoryName | "unbudgeted" | null) => void;
-  updateTargetPercentages: (targets: TargetPercentages) => void;
-  resetTargetPercentages: () => void;
-  getTargetPercentage: (category: SpendingCategoryName) => number;
-  getTotalByCategory: (category: CategoryName) => number;
+
+  // income
+  addIncomeItem: (label: string, amount: number) => void;
+  updateIncomeItem: (id: string, label: string, amount: number) => void;
+  removeIncomeItem: (id: string) => void;
+
+  // categories
+  addCategory: (name: string, targetPercentage?: number) => BudgetCategory;
+  renameCategory: (categoryId: string, name: string) => void;
+  deleteCategory: (categoryId: string, behavior: "keep" | "delete") => void;
+  reorderCategories: (orderedCategoryIds: string[]) => void;
+  updateCategoryTarget: (categoryId: string, targetPercentage: number) => void;
+  setCategoryTargets: (targets: Record<string, number>) => void;
+
+  // budget items
+  addBudgetItem: (categoryId: string | null, label: string, amount: number) => void;
+  updateBudgetItem: (id: string, label: string, amount: number) => void;
+  removeBudgetItem: (id: string) => void;
+  moveBudgetItem: (id: string, categoryId: string | null, index?: number) => void;
+
+  // selection
+  setSelectedCategory: (categoryId: string | SpecialSelectionId | null) => void;
+
+  // totals
   getTotalIncome: () => number;
+  getTotalBudgeted: () => number;
   getUnbudgetedAmount: () => number;
-  getGrandTotal: () => number;
-  getPercentageByCategory: (category: CategoryName) => number;
-  getPercentageOfIncome: (category: SpendingCategoryName) => number;
+  getTotalForCategory: (categoryId: string | null) => number;
+
+  // data ops
   clearAllData: () => void;
-  importBudget: (data: SerializedBudget) => void;
-  exportBudget: () => SerializedBudget;
+  importBudget: (data: SerializedBudgetV3) => void;
+  exportBudget: () => SerializedBudgetV3;
   setCurrentBudgetName: (name: string | undefined) => void;
   saveCurrentBudget: (name?: string) => SavedBudget;
   loadSavedBudget: (id: string) => boolean;
@@ -668,9 +892,9 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
   const hasLoadedFromStorage = useRef(false);
   const latestStoreStateRef = useRef(storeState);
   const persistTimeoutRef = useRef<number | null>(null);
-  const pendingSlicesRef = useRef({ currentBudget: false, savedBudgets: false });
+  const pendingSlicesRef = useRef({ currentPlan: false, savedBudgets: false });
   const lastPersistedRevisionRef = useRef(storeState.revision);
-  const lastPersistedCurrentRef = useRef(storeState.currentBudget);
+  const lastPersistedCurrentRef = useRef(storeState.currentPlan);
   const lastPersistedSavedBudgetsRef = useRef(storeState.savedBudgets);
 
   useEffect(() => {
@@ -686,7 +910,7 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
     const pending = pendingSlicesRef.current;
 
     if (
-      !pending.currentBudget &&
+      !pending.currentPlan &&
       !pending.savedBudgets &&
       nextState.revision === lastPersistedRevisionRef.current
     ) {
@@ -694,30 +918,30 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      if (pending.currentBudget) {
+      if (pending.currentPlan) {
         window.localStorage.setItem(
-          CURRENT_BUDGET_STORAGE_KEY,
-          JSON.stringify(toPersistedCurrentBudget(nextState.currentBudget)),
+          CURRENT_PLAN_STORAGE_KEY,
+          JSON.stringify(toPersistedCurrentPlan(nextState.currentPlan)),
         );
-        lastPersistedCurrentRef.current = nextState.currentBudget;
+        lastPersistedCurrentRef.current = nextState.currentPlan;
       }
 
       if (pending.savedBudgets) {
         window.localStorage.setItem(
-          SAVED_BUDGETS_STORAGE_KEY,
-          JSON.stringify(toPersistedSavedBudgets(nextState.savedBudgets)),
+          SAVED_PLANS_STORAGE_KEY,
+          JSON.stringify(toPersistedSavedPlans(nextState.savedBudgets)),
         );
         lastPersistedSavedBudgetsRef.current = nextState.savedBudgets;
       }
 
-      if (pending.currentBudget || pending.savedBudgets) {
+      if (pending.currentPlan || pending.savedBudgets) {
         window.localStorage.setItem(
           APP_STATE_META_STORAGE_KEY,
           JSON.stringify(toPersistedMeta(nextState.revision)),
         );
       }
 
-      pendingSlicesRef.current = { currentBudget: false, savedBudgets: false };
+      pendingSlicesRef.current = { currentPlan: false, savedBudgets: false };
       lastPersistedRevisionRef.current = nextState.revision;
     } catch (error) {
       console.error("Failed to persist budget data:", error);
@@ -735,9 +959,9 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
     const hydratedStoreState = loadStoreFromStorage();
     latestStoreStateRef.current = hydratedStoreState;
     lastPersistedRevisionRef.current = hydratedStoreState.revision;
-    lastPersistedCurrentRef.current = hydratedStoreState.currentBudget;
+    lastPersistedCurrentRef.current = hydratedStoreState.currentPlan;
     lastPersistedSavedBudgetsRef.current = hydratedStoreState.savedBudgets;
-    pendingSlicesRef.current = { currentBudget: false, savedBudgets: false };
+    pendingSlicesRef.current = { currentPlan: false, savedBudgets: false };
 
     dispatch({ type: "HYDRATE", storeState: hydratedStoreState });
   }, [isHydrated]);
@@ -752,15 +976,15 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (storeState.currentBudget !== lastPersistedCurrentRef.current) {
-      pendingSlicesRef.current.currentBudget = true;
+    if (storeState.currentPlan !== lastPersistedCurrentRef.current) {
+      pendingSlicesRef.current.currentPlan = true;
     }
 
     if (storeState.savedBudgets !== lastPersistedSavedBudgetsRef.current) {
       pendingSlicesRef.current.savedBudgets = true;
     }
 
-    if (!pendingSlicesRef.current.currentBudget && !pendingSlicesRef.current.savedBudgets) {
+    if (!pendingSlicesRef.current.currentPlan && !pendingSlicesRef.current.savedBudgets) {
       return;
     }
 
@@ -799,7 +1023,6 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
       if (document.visibilityState !== "hidden") {
         return;
       }
-
       if (persistTimeoutRef.current !== null) {
         window.clearTimeout(persistTimeoutRef.current);
         persistTimeoutRef.current = null;
@@ -828,35 +1051,25 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
       }
 
       const incomingMeta = parsePersistedMeta(event.newValue);
-      if (!incomingMeta) {
-        return;
-      }
+      if (!incomingMeta) return;
+      if (incomingMeta.revision <= latestStoreStateRef.current.revision) return;
 
-      if (incomingMeta.revision <= latestStoreStateRef.current.revision) {
-        return;
-      }
-
-      const incomingCurrentBudget = parsePersistedCurrentBudget(
-        window.localStorage.getItem(CURRENT_BUDGET_STORAGE_KEY),
+      const incomingPlan = parsePersistedCurrentPlan(
+        window.localStorage.getItem(CURRENT_PLAN_STORAGE_KEY),
       );
-      if (!incomingCurrentBudget) {
-        return;
-      }
+      if (!incomingPlan) return;
 
       const incomingSavedBudgets =
-        parsePersistedSavedBudgets(window.localStorage.getItem(SAVED_BUDGETS_STORAGE_KEY)) || [];
+        parsePersistedSavedPlans(window.localStorage.getItem(SAVED_PLANS_STORAGE_KEY)) || [];
 
       const incomingStoreState: BudgetStoreState = {
-        currentBudget: incomingCurrentBudget,
+        currentPlan: incomingPlan,
         savedBudgets: incomingSavedBudgets,
         revision: incomingMeta.revision,
       };
 
-      if (
-        hasCurrentBudgetItems(incomingStoreState.currentBudget) &&
-        !incomingStoreState.currentBudget.currentBudgetName
-      ) {
-        incomingStoreState.currentBudget.currentBudgetName = generateBudgetName();
+      if (hasPlanData(incomingStoreState.currentPlan) && !incomingStoreState.currentPlan.name) {
+        incomingStoreState.currentPlan.name = generateBudgetName();
       }
 
       if (persistTimeoutRef.current !== null) {
@@ -864,260 +1077,236 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
         persistTimeoutRef.current = null;
       }
 
-      pendingSlicesRef.current = { currentBudget: false, savedBudgets: false };
+      pendingSlicesRef.current = { currentPlan: false, savedBudgets: false };
       latestStoreStateRef.current = incomingStoreState;
       lastPersistedRevisionRef.current = incomingStoreState.revision;
-      lastPersistedCurrentRef.current = incomingStoreState.currentBudget;
+      lastPersistedCurrentRef.current = incomingStoreState.currentPlan;
       lastPersistedSavedBudgetsRef.current = incomingStoreState.savedBudgets;
       dispatch({ type: "HYDRATE", storeState: incomingStoreState });
     };
 
     window.addEventListener("storage", handleStorageChange);
-
-    return () => {
-      window.removeEventListener("storage", handleStorageChange);
-    };
+    return () => window.removeEventListener("storage", handleStorageChange);
   }, [isHydrated]);
 
   // Keep a usable default name whenever a budget has data.
   useEffect(() => {
     if (
       !hasLoadedFromStorage.current ||
-      !hasCurrentBudgetItems(storeState.currentBudget) ||
-      storeState.currentBudget.currentBudgetName
+      !hasPlanData(storeState.currentPlan) ||
+      storeState.currentPlan.name
     ) {
       return;
     }
 
-    dispatch({
-      type: "SET_CURRENT_BUDGET_NAME",
-      name: generateBudgetName(),
-    });
-  }, [storeState.currentBudget]);
+    dispatch({ type: "SET_CURRENT_BUDGET_NAME", name: generateBudgetName() });
+  }, [storeState.currentPlan]);
 
-  const addItem = useCallback(
-    (category: CategoryName, label: string, amount: number) => {
-      const item: BudgetItem = {
-        id: crypto.randomUUID(),
+  const plan = storeState.currentPlan;
+
+  // --- income ---
+  const addIncomeItem = useCallback((label: string, amount: number) => {
+    dispatch({
+      type: "ADD_INCOME_ITEM",
+      item: {
+        id: createId(),
         label,
         amount,
-      };
-      dispatch({ type: "ADD_ITEM", category, item });
-    },
-    [],
-  );
-
-  const removeItem = useCallback((category: CategoryName, itemId: string) => {
-    dispatch({ type: "REMOVE_ITEM", category, itemId });
-  }, []);
-
-  const updateItem = useCallback((category: CategoryName, item: BudgetItem) => {
-    dispatch({ type: "UPDATE_ITEM", category, item });
-  }, []);
-
-  const setSelectedCategory = useCallback(
-    (category: CategoryName | "unbudgeted" | null) => {
-      dispatch({ type: "SET_SELECTED_CATEGORY", category });
-    },
-    [],
-  );
-
-  const getTotalByCategory = useCallback(
-    (category: CategoryName): number => {
-      return storeState.currentBudget.categories[category].items.reduce(
-        (sum, item) => sum + item.amount,
-        0,
-      );
-    },
-    [storeState.currentBudget.categories],
-  );
-
-  // Total income from all sources
-  const totalIncome = useMemo(() => {
-    return storeState.currentBudget.categories.income.items.reduce(
-      (sum, item) => sum + item.amount,
-      0,
-    );
-  }, [storeState.currentBudget.categories.income.items]);
-
-  // Total spending (needs + wants + savings, excluding income)
-  const totalSpending = useMemo(() => {
-    return (
-      storeState.currentBudget.categories.needs.items.reduce((sum, item) => sum + item.amount, 0) +
-      storeState.currentBudget.categories.wants.items.reduce((sum, item) => sum + item.amount, 0) +
-      storeState.currentBudget.categories.savings.items.reduce((sum, item) => sum + item.amount, 0)
-    );
-  }, [storeState.currentBudget.categories]);
-
-  // Unbudgeted amount (income - spending)
-  const unbudgetedAmount = useMemo(() => {
-    return totalIncome - totalSpending;
-  }, [totalIncome, totalSpending]);
-
-  const getTotalIncome = useCallback((): number => {
-    return totalIncome;
-  }, [totalIncome]);
-
-  const getUnbudgetedAmount = useCallback((): number => {
-    return unbudgetedAmount;
-  }, [unbudgetedAmount]);
-
-  // Legacy function - now returns total spending (for backward compatibility)
-  const getGrandTotal = useCallback((): number => {
-    return totalSpending;
-  }, [totalSpending]);
-
-  // Get percentage of income (for spending categories)
-  const getPercentageOfIncome = useCallback(
-    (category: SpendingCategoryName): number => {
-      if (totalIncome === 0) return 0;
-      return (getTotalByCategory(category) / totalIncome) * 100;
-    },
-    [totalIncome, getTotalByCategory],
-  );
-
-  // Legacy function - kept for compatibility but calculates as % of spending
-  const getPercentageByCategory = useCallback(
-    (category: CategoryName): number => {
-      if (totalSpending === 0) return 0;
-      return (getTotalByCategory(category) / totalSpending) * 100;
-    },
-    [totalSpending, getTotalByCategory],
-  );
-
-  const updateTargetPercentages = useCallback((targets: TargetPercentages) => {
-    dispatch({ type: "UPDATE_TARGET_PERCENTAGES", targets });
-  }, []);
-
-  const resetTargetPercentages = useCallback(() => {
-    dispatch({
-      type: "UPDATE_TARGET_PERCENTAGES",
-      targets: {
-        needs: CATEGORY_CONFIG.needs.targetPercentage,
-        wants: CATEGORY_CONFIG.wants.targetPercentage,
-        savings: CATEGORY_CONFIG.savings.targetPercentage,
+        sortOrder: nextIncomeSortOrder(latestStoreStateRef.current.currentPlan),
       },
     });
   }, []);
 
-  const getTargetPercentage = useCallback(
-    (category: SpendingCategoryName): number => {
-      return storeState.currentBudget.targetPercentages[category];
+  const updateIncomeItem = useCallback((id: string, label: string, amount: number) => {
+    dispatch({ type: "UPDATE_INCOME_ITEM", id, label, amount });
+  }, []);
+
+  const removeIncomeItem = useCallback((id: string) => {
+    dispatch({ type: "REMOVE_INCOME_ITEM", id });
+  }, []);
+
+  // --- categories ---
+  const addCategory = useCallback((name: string, targetPercentage?: number) => {
+    const category = createCategory(latestStoreStateRef.current.currentPlan, name, {
+      targetPercentage,
+    });
+    dispatch({ type: "ADD_CATEGORY", category });
+    return category;
+  }, []);
+
+  const renameCategory = useCallback((categoryId: string, name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    dispatch({ type: "RENAME_CATEGORY", categoryId, name: trimmed });
+  }, []);
+
+  const deleteCategory = useCallback(
+    (categoryId: string, behavior: "keep" | "delete") => {
+      dispatch({ type: "DELETE_CATEGORY", categoryId, behavior });
     },
-    [storeState.currentBudget.targetPercentages],
+    [],
   );
 
-  const clearAllData = useCallback(() => {
-    dispatch({ type: "CLEAR_ALL" });
+  const reorderCategories = useCallback((orderedCategoryIds: string[]) => {
+    dispatch({ type: "REORDER_CATEGORIES", orderedCategoryIds });
   }, []);
 
-  const importBudget = useCallback((data: SerializedBudget) => {
-    dispatch({ type: "IMPORT_BUDGET", data });
+  const updateCategoryTarget = useCallback(
+    (categoryId: string, targetPercentage: number) => {
+      dispatch({ type: "UPDATE_CATEGORY_TARGET", categoryId, targetPercentage });
+    },
+    [],
+  );
+
+  const setCategoryTargets = useCallback((targets: Record<string, number>) => {
+    dispatch({ type: "SET_CATEGORY_TARGETS", targets });
   }, []);
 
-  const exportBudget = useCallback((): SerializedBudget => {
-    return serializeBudget(storeState.currentBudget);
-  }, [storeState.currentBudget]);
+  // --- budget items ---
+  const addBudgetItem = useCallback(
+    (categoryId: string | null, label: string, amount: number) => {
+      dispatch({
+        type: "ADD_BUDGET_ITEM",
+        item: {
+          id: createId(),
+          label,
+          amount,
+          categoryId,
+          sortOrder: nextItemSortOrder(latestStoreStateRef.current.currentPlan, categoryId),
+        },
+      });
+    },
+    [],
+  );
+
+  const updateBudgetItem = useCallback((id: string, label: string, amount: number) => {
+    dispatch({ type: "UPDATE_BUDGET_ITEM", id, label, amount });
+  }, []);
+
+  const removeBudgetItem = useCallback((id: string) => {
+    dispatch({ type: "REMOVE_BUDGET_ITEM", id });
+  }, []);
+
+  const moveBudgetItem = useCallback(
+    (id: string, categoryId: string | null, index?: number) => {
+      dispatch({ type: "MOVE_BUDGET_ITEM", id, categoryId, index });
+    },
+    [],
+  );
+
+  // --- selection ---
+  const setSelectedCategory = useCallback(
+    (categoryId: string | SpecialSelectionId | null) => {
+      dispatch({ type: "SET_SELECTED_CATEGORY", categoryId });
+    },
+    [],
+  );
+
+  // --- totals ---
+  const totalIncome = useMemo(() => selectTotalIncome(plan), [plan]);
+  const totalBudgeted = useMemo(() => getTotalBudgeted(plan), [plan]);
+  const unbudgetedAmount = totalIncome - totalBudgeted;
+
+  const getTotalIncomeCb = useCallback(() => totalIncome, [totalIncome]);
+  const getTotalBudgetedCb = useCallback(() => totalBudgeted, [totalBudgeted]);
+  const getUnbudgetedAmountCb = useCallback(() => unbudgetedAmount, [unbudgetedAmount]);
+  const getTotalForCategoryCb = useCallback(
+    (categoryId: string | null) => getTotalForCategory(plan, categoryId),
+    [plan],
+  );
+
+  // --- data ops ---
+  const clearAllData = useCallback(() => dispatch({ type: "CLEAR_ALL" }), []);
+
+  const importBudget = useCallback((data: SerializedBudgetV3) => {
+    dispatch({ type: "IMPORT_PLAN", plan: planFromSerializedV3(data) });
+  }, []);
+
+  const exportBudget = useCallback((): SerializedBudgetV3 => serializePlan(plan), [plan]);
 
   const setCurrentBudgetName = useCallback((name: string | undefined) => {
     dispatch({ type: "SET_CURRENT_BUDGET_NAME", name });
   }, []);
 
-  const saveCurrentBudget = useCallback(
-    (name?: string): SavedBudget => {
-      const budgetName = getBudgetNameOrDefault(name, storeState.currentBudget.currentBudgetName);
-      const now = new Date().toISOString();
+  const saveCurrentBudget = useCallback((name?: string): SavedBudget => {
+    const current = latestStoreStateRef.current.currentPlan;
+    const budgetName = getBudgetNameOrDefault(name, current.name);
+    const now = new Date().toISOString();
+    const budget: SavedBudget = {
+      id: createId(),
+      name: budgetName,
+      createdAt: now,
+      lastModifiedAt: now,
+      data: serializePlan(current),
+    };
+    dispatch({ type: "SAVE_CURRENT_BUDGET", budget, budgetName });
+    return budget;
+  }, []);
 
-      const budget: SavedBudget = {
-        id: crypto.randomUUID(),
-        name: budgetName,
-        createdAt: now,
-        lastModifiedAt: now,
-        data: serializeBudget(storeState.currentBudget),
-      };
+  const loadSavedBudget = useCallback((id: string): boolean => {
+    const exists = latestStoreStateRef.current.savedBudgets.some(
+      (budget) => budget.id === id,
+    );
+    if (!exists) return false;
+    dispatch({ type: "LOAD_SAVED_BUDGET", budgetId: id });
+    return true;
+  }, []);
 
-      dispatch({ type: "SAVE_CURRENT_BUDGET", budget, budgetName });
-      return budget;
-    },
-    [storeState.currentBudget],
-  );
+  const renameSavedBudget = useCallback((id: string, newName: string): SavedBudget | null => {
+    const existing = latestStoreStateRef.current.savedBudgets.find(
+      (budget) => budget.id === id,
+    );
+    if (!existing) return null;
 
-  const loadSavedBudget = useCallback(
-    (id: string): boolean => {
-      const exists = storeState.savedBudgets.some((budget) => budget.id === id);
-      if (!exists) {
-        return false;
-      }
+    const name = newName.trim();
+    if (!name || name === existing.name) return existing;
 
-      dispatch({ type: "LOAD_SAVED_BUDGET", budgetId: id });
-      return true;
-    },
-    [storeState.savedBudgets],
-  );
+    const updatedBudget: SavedBudget = {
+      ...existing,
+      name,
+      lastModifiedAt: new Date().toISOString(),
+    };
+    dispatch({ type: "RENAME_SAVED_BUDGET", budget: updatedBudget });
+    return updatedBudget;
+  }, []);
 
-  const renameSavedBudget = useCallback(
-    (id: string, newName: string): SavedBudget | null => {
-      const existing = storeState.savedBudgets.find((budget) => budget.id === id);
-      if (!existing) {
-        return null;
-      }
+  const deleteSavedBudget = useCallback((id: string): boolean => {
+    const exists = latestStoreStateRef.current.savedBudgets.some(
+      (budget) => budget.id === id,
+    );
+    if (!exists) return false;
+    dispatch({ type: "DELETE_SAVED_BUDGET", budgetId: id });
+    return true;
+  }, []);
 
-      const name = newName.trim();
-      if (!name || name === existing.name) {
-        return existing;
-      }
-
-      const updatedBudget: SavedBudget = {
-        ...existing,
-        name,
-        lastModifiedAt: new Date().toISOString(),
-      };
-
-      dispatch({ type: "RENAME_SAVED_BUDGET", budget: updatedBudget });
-      return updatedBudget;
-    },
-    [storeState.savedBudgets],
-  );
-
-  const deleteSavedBudget = useCallback(
-    (id: string): boolean => {
-      const exists = storeState.savedBudgets.some((budget) => budget.id === id);
-      if (!exists) {
-        return false;
-      }
-
-      dispatch({ type: "DELETE_SAVED_BUDGET", budgetId: id });
-      return true;
-    },
-    [storeState.savedBudgets],
-  );
-
-  const getSavedBudgetById = useCallback(
-    (id: string): SavedBudget | null => {
-      return storeState.savedBudgets.find((budget) => budget.id === id) || null;
-    },
-    [storeState.savedBudgets],
-  );
+  const getSavedBudgetById = useCallback((id: string): SavedBudget | null => {
+    return storeState.savedBudgets.find((budget) => budget.id === id) || null;
+  }, [storeState.savedBudgets]);
 
   return (
     <BudgetContext.Provider
       value={{
-        state: storeState.currentBudget,
+        state: plan,
         savedBudgets: storeState.savedBudgets,
         isHydrated,
-        addItem,
-        removeItem,
-        updateItem,
+        addIncomeItem,
+        updateIncomeItem,
+        removeIncomeItem,
+        addCategory,
+        renameCategory,
+        deleteCategory,
+        reorderCategories,
+        updateCategoryTarget,
+        setCategoryTargets,
+        addBudgetItem,
+        updateBudgetItem,
+        removeBudgetItem,
+        moveBudgetItem,
         setSelectedCategory,
-        updateTargetPercentages,
-        resetTargetPercentages,
-        getTargetPercentage,
-        getTotalByCategory,
-        getTotalIncome,
-        getUnbudgetedAmount,
-        getGrandTotal,
-        getPercentageByCategory,
-        getPercentageOfIncome,
+        getTotalIncome: getTotalIncomeCb,
+        getTotalBudgeted: getTotalBudgetedCb,
+        getUnbudgetedAmount: getUnbudgetedAmountCb,
+        getTotalForCategory: getTotalForCategoryCb,
         clearAllData,
         importBudget,
         exportBudget,

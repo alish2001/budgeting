@@ -4,13 +4,9 @@ This document provides comprehensive information for AI agents, developers, and 
 
 ## 📋 Project Overview
 
-**Oversight - Budget Planner** is a modern, interactive web application that helps users manage their finances using the **50/30/20 budgeting rule**:
+**Oversight - Budget Planner** is a modern, interactive web application that helps users manage their finances with **fully customizable budget categories**. New plans start from the familiar **50/30/20 starter template** (Needs / Wants / Savings), but users can add, rename, reorder, delete, and re-target categories, and move budget line items between them (including a drag-and-drop "Unassigned" lane).
 
-- **50%** of income for Needs (essential expenses)
-- **30%** of income for Wants (discretionary spending)
-- **20%** of income for Savings
-
-The application provides real-time visualization, income tracking, and detailed breakdowns to help users understand their spending patterns and stay within budget targets.
+The application provides real-time visualization, income tracking, and detailed breakdowns to help users understand their spending patterns and stay within their own targets.
 
 ### Key Features
 
@@ -270,28 +266,25 @@ bun run lint
 
 The application uses React Context API with `useReducer` for global state:
 
-- **State Structure**: Unified in-memory store with `currentBudget`, `savedBudgets`, and `revision`
-- **Actions**: ADD/REMOVE/UPDATE item, target updates, import, save/load/rename/delete saved budgets, hydration
-- **Persistence**: Debounced split-key localStorage sync (client-side only)
+- **State Structure**: Unified in-memory store with `currentPlan` (a `BudgetPlan`), `savedBudgets`, and `revision`
+- **Dynamic categories (v3)**: A `BudgetPlan` holds `incomeItems`, user-defined `categories`, and `budgetItems` keyed by stable IDs. Each `budgetItem.categoryId` points at zero or one category (`null` = unassigned/orphaned). This replaces the old fixed `needs/wants/savings` records.
+- **Actions**: income add/update/remove; category add/rename/delete (keep-or-delete items)/reorder/target; budget item add/update/remove/move; import, clear, save/load/rename/delete saved budgets, hydration
+- **Persistence**: Debounced split-key localStorage sync under v3 keys (`oversight-current-plan-v3`, `oversight-saved-plans-v3`, `oversight-app-meta-v3`). Legacy v2 keys are read once and migrated forward on load.
 - **Hydration**: Uses `useSyncExternalStore` to prevent SSR/client mismatches
-- **Performance**: All context functions are memoized with `useCallback`; current-budget and saved-budgets slices persist independently for smaller writes
+- **Performance**: All context functions are memoized with `useCallback`; current-plan and saved-budgets slices persist independently for smaller writes
 
-**Key Functions**:
+**Key Functions** (context):
 
-- `getTotalIncome()` - Sum of all income items
-- `getTotalBudgeted()` - Sum of needs/wants/savings
-- `getUnbudgetedAmount()` - Remaining unbudgeted income
-- `getPercentageByCategory()` - Percentage of income for each category
-- `getPercentageOfIncome()` - Percentage of income for spending categories
-- `getTargetPercentage()` - Get target percentage for a category
-- `updateTargetPercentages()` - Update custom target percentages
-- `resetTargetPercentages()` - Reset to default 50/30/20 targets
-- `importBudget(data)` - Import a serialized budget (from sharing)
-- `exportBudget()` - Export current budget as serialized format
-- `saveCurrentBudget(name?)` - Save current in-memory budget to saved budgets
-- `loadSavedBudget(id)` - Load a saved budget into current state
-- `renameSavedBudget(id, newName)` - Rename a saved budget entry
-- `deleteSavedBudget(id)` - Delete a saved budget entry
+- `getTotalIncome()` / `getTotalBudgeted()` / `getUnbudgetedAmount()`
+- `getTotalForCategory(categoryId | null)` - total for a category (or the unassigned lane)
+- `addIncomeItem` / `updateIncomeItem` / `removeIncomeItem`
+- `addCategory(name, targetPercentage?)` / `renameCategory` / `deleteCategory(id, "keep" | "delete")` / `reorderCategories(orderedIds)`
+- `updateCategoryTarget(id, pct)` / `setCategoryTargets(map)`
+- `addBudgetItem(categoryId, label, amount)` / `updateBudgetItem(id, label, amount)` / `removeBudgetItem(id)` / `moveBudgetItem(id, categoryId | null, index?)`
+- `importBudget(data)` / `exportBudget()` - v3 serialized format
+- `saveCurrentBudget(name?)` / `loadSavedBudget(id)` / `renameSavedBudget(id, name)` / `deleteSavedBudget(id)`
+
+**Pure helpers** live in `src/lib/budget-plan.ts`: `createDefaultPlan`, `createCategory`, `serializePlan`, `planFromSerializedV3`, `serializedV2ToV3`, plus selectors (`getSortedCategories`, `getItemsForCategory`, `getUnassignedItems`, `getTotalForCategory`, `hasPlanData`, …).
 
 ### Design Language State Management
 
@@ -307,23 +300,22 @@ The application uses a dedicated context for UI design language selection:
 - **Primary API**:
   - `useDesignLanguage()` hook
   - `setDesignLanguage("cyberpunk" | "delight")`
-  - `getCategoryColor(category, designLanguage)`
-  - `getItemizedCategoryPalette(category, designLanguage)`
+  - `getCategoryColorByIndex(index, designLanguage)` - palette color by category position
+  - `resolveCategoryColor(colorToken, sortIndex, designLanguage)` - remaps themed slots, falls back to custom hues
+  - `getIncomeColor` / `getUnassignedColor` / `getItemizedPalette`
 
 ### Type System
 
 **Location**: `src/types/budget.ts`
 
-- `BudgetItem`: `{ id: string, label: string, amount: number }`
-- `CategoryName`: `"needs" | "wants" | "savings" | "income"`
-- `SpendingCategoryName`: `"needs" | "wants" | "savings"`
-- `BudgetCategory`: Category with items, target percentage, and color
-- `TargetPercentages`: Record of custom target percentages for spending categories
-- `BudgetState`: Complete application state (includes categories, targetPercentages, selectedCategory)
-- `CATEGORY_CONFIG`: Default colors, labels, and target percentages
-- `SerializedBudget`: Compact format for sharing (items without IDs, optional targets)
-- `SerializedBudgetItem`: `{ label: string, amount: number }` (no ID for sharing)
-- `SavedBudget`: Stored budget with id, name, timestamps, and serialized data
+- `BudgetItem`: `{ id, label, amount }` (shared primitive)
+- `BudgetPlan`: the v3 domain model — `{ id, name?, incomeItems, categories, budgetItems, settings, selectedCategoryId, … }`
+- `BudgetCategory`: `{ id, name, targetPercentage, colorToken, sortOrder, parentCategoryId?, isDefault? }` (`parentCategoryId` reserved for future subcategories)
+- `BudgetLineItem`: `{ id, label, amount, categoryId: string | null, sortOrder }`
+- `IncomeItem`: `{ id, label, amount, sortOrder }`
+- `SerializedBudgetV3`: `{ version: 3, name?, income, categories[], unassigned? }` (compact share format, no IDs)
+- `SavedBudget`: Stored budget with id, name, timestamps, and v3 serialized data
+- **Legacy (retained for migration/onboarding defaults)**: `CategoryName`, `SpendingCategoryName`, `CATEGORY_CONFIG`, `SerializedBudget` (v2)
 
 ### Component Architecture
 

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Share2, ArrowLeft, Link, Code, Copy, Check } from "lucide-react";
 import { useBudget } from "@/lib/budget-context";
 import { encodeBudget, generateShareUrl } from "@/lib/budget-serialization";
+import { hasPlanData } from "@/lib/budget-plan";
 import { KeyboardShortcut } from "./keyboard-shortcut";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,15 +16,11 @@ interface ShareBudgetViewProps {
 }
 
 export function ShareBudgetView({ onCancel }: ShareBudgetViewProps) {
-  const { state, isHydrated, getTotalIncome } = useBudget();
+  const { state, isHydrated } = useBudget();
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
 
-  const totalIncome = getTotalIncome();
-  const hasData = totalIncome > 0 || 
-                  state.categories.needs.items.length > 0 || 
-                  state.categories.wants.items.length > 0 || 
-                  state.categories.savings.items.length > 0;
+  const hasData = hasPlanData(state);
 
   const shareUrl = isHydrated && hasData ? generateShareUrl(state) : "";
   const shareCode = isHydrated && hasData ? encodeBudget(state) : "";

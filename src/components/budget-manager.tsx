@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useBudget } from "@/lib/budget-context";
 import { formatBudgetDate, generateBudgetName } from "@/lib/budget-storage";
-import { SavedBudget, SerializedBudget } from "@/types/budget";
+import { SavedBudget, SerializedBudgetV3 } from "@/types/budget";
+import { hasPlanData } from "@/lib/budget-plan";
 import { formatCurrency } from "@/lib/utils";
 import {
   ChevronDown,
@@ -31,7 +32,6 @@ export function BudgetManager() {
     renameSavedBudget,
     deleteSavedBudget,
     isHydrated,
-    getTotalIncome,
   } = useBudget();
   const [isOpen, setIsOpen] = useState(false);
   const saveNameInputRef = useRef<HTMLInputElement>(null);
@@ -41,12 +41,7 @@ export function BudgetManager() {
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
-  const totalIncome = getTotalIncome();
-  const hasCurrentBudget =
-    totalIncome > 0 ||
-    state.categories.needs.items.length > 0 ||
-    state.categories.wants.items.length > 0 ||
-    state.categories.savings.items.length > 0;
+  const hasCurrentBudget = hasPlanData(state);
 
   const handleSaveBudget = useCallback(() => {
     if (isSaving || !hasCurrentBudget) return;
@@ -56,14 +51,14 @@ export function BudgetManager() {
     setTimeout(() => {
       const inputName = saveNameInputRef.current?.value ?? "";
       const name =
-        inputName.trim() || state.currentBudgetName || generateBudgetName();
+        inputName.trim() || state.name || generateBudgetName();
       saveCurrentBudget(name);
       setIsSaving(false);
       setShowSaveSuccess(true);
 
       setTimeout(() => setShowSaveSuccess(false), 2000);
     }, 300);
-  }, [state.currentBudgetName, isSaving, hasCurrentBudget, saveCurrentBudget]);
+  }, [state.name, isSaving, hasCurrentBudget, saveCurrentBudget]);
 
   const handleLoadBudget = useCallback((budget: SavedBudget) => {
     setLoadingId(budget.id);
@@ -98,16 +93,14 @@ export function BudgetManager() {
     setEditName("");
   }, []);
 
-  const getBudgetSummary = (data: SerializedBudget) => {
-    const totalIncome = data.items.income.reduce(
-      (sum, item) => sum + item.amount,
+  const getBudgetSummary = (data: SerializedBudgetV3) => {
+    const totalIncome = data.income.reduce((sum, item) => sum + item.amount, 0);
+    const categoryItems = data.categories.reduce(
+      (sum, category) => sum + category.items.length,
       0,
     );
     const totalItems =
-      data.items.needs.length +
-      data.items.wants.length +
-      data.items.savings.length +
-      data.items.income.length;
+      categoryItems + (data.unassigned?.length ?? 0) + data.income.length;
     return { totalIncome, totalItems };
   };
 
@@ -175,10 +168,10 @@ export function BudgetManager() {
                 <div className="flex flex-col sm:flex-row gap-2">
                   <Input
                     id="save-budget-name"
-                    key={state.currentBudgetName || "budget-name"}
+                    key={state.name || "budget-name"}
                     ref={saveNameInputRef}
                     placeholder={generateBudgetName()}
-                    defaultValue={state.currentBudgetName || ""}
+                    defaultValue={state.name || ""}
                     className="flex-1"
                     disabled={isSaving || !hasCurrentBudget}
                   />

@@ -14,9 +14,6 @@ import {
   Moon,
   Sun,
   Search,
-  DollarSign,
-  PiggyBank,
-  ShoppingBag,
   Wallet,
   X,
   Share2,
@@ -26,28 +23,31 @@ import {
   Edit2,
   Sparkles,
   Check,
+  Tag,
+  ArrowLeft,
+  ArrowRightLeft,
+  Target,
+  Inbox,
 } from "lucide-react";
 import { useBudget } from "@/lib/budget-context";
 import {
-  CategoryName,
-  BudgetItem,
-  CATEGORY_CONFIG,
-} from "@/types/budget";
+  getSortedCategories,
+  getSortedIncomeItems,
+  getItemsForCategory,
+  getCategoryById,
+} from "@/lib/budget-plan";
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { useDesignLanguage } from "@/lib/design-language-context";
-import { getCategoryColor } from "@/lib/design-language";
+import { getIncomeColor, resolveCategoryColor } from "@/lib/design-language";
 
-// Types
 import type { PaletteMode } from "./types";
 
-// Constants
-import { CATEGORY_ICONS } from "./constants";
-
-// Components
 import { KeyboardShortcut } from "./components/keyboard-shortcut";
 import { AddItemForm } from "./components/add-item-form";
 import { EditItemForm } from "./components/edit-item-form";
+import { CategoryNameForm } from "./components/category-name-form";
+import { SetTargetForm } from "./components/set-target-form";
 import { ClearConfirmation } from "./components/clear-confirmation";
 import { ShareBudgetView } from "./components/share-budget-view";
 import { ImportBudgetView } from "./components/import-budget-view";
@@ -57,7 +57,10 @@ import { SaveBudgetView } from "./components/save-budget-view";
 import { RenameSavedBudgetView } from "./components/rename-saved-budget-view";
 import { DeleteSavedBudgetView } from "./components/delete-saved-budget-view";
 
-// Main Command Palette Component
+const itemClass =
+  "flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground";
+const groupClass = "px-2 py-1.5 text-xs font-medium text-muted-foreground";
+
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
@@ -70,26 +73,28 @@ export function CommandPalette() {
   const {
     state,
     savedBudgets,
-    removeItem,
+    removeIncomeItem,
+    removeBudgetItem,
+    moveBudgetItem,
+    addCategory,
+    renameCategory,
+    deleteCategory,
+    updateCategoryTarget,
     clearAllData,
     isHydrated,
   } = useBudget();
 
-  // Global keyboard listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Check for Cmd/Ctrl + K
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
         setOpen((prev) => !prev);
       }
     };
-
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Close the palette and reset state
   const closePalette = useCallback(() => {
     setIsClosing(true);
     setTimeout(() => {
@@ -100,65 +105,72 @@ export function CommandPalette() {
     }, 150);
   }, []);
 
-  // Handle keyboard navigation (idiomatic cmdk pattern for nested pages)
-  // This follows the exact pattern from cmdk docs for nested pages
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    const target = e.target as HTMLElement | null;
-    const isTextInput =
-      target instanceof HTMLInputElement ||
-      target instanceof HTMLTextAreaElement ||
-      Boolean(target?.isContentEditable);
-    const hasTextValue =
-      target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
-        ? target.value.length > 0
-        : Boolean(target?.textContent);
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isTextInput =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        Boolean(target?.isContentEditable);
+      const hasTextValue =
+        target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
+          ? target.value.length > 0
+          : Boolean(target?.textContent);
 
-    if (e.key === "Escape" || (e.key === "Backspace" && !search && !hasTextValue)) {
-      if (e.key === "Backspace" && isTextInput) return;
-      e.preventDefault();
-      if (mode.type !== "default") {
-        // Not at root - navigate back to default
-        setMode({ type: "default" });
-        setSearch("");
-      } else {
-        // At root - close the palette
-        closePalette();
+      if (e.key === "Escape" || (e.key === "Backspace" && !search && !hasTextValue)) {
+        if (e.key === "Backspace" && isTextInput) return;
+        e.preventDefault();
+        if (mode.type !== "default") {
+          setMode({ type: "default" });
+          setSearch("");
+        } else {
+          closePalette();
+        }
       }
-    }
-  }, [mode.type, search, closePalette]);
+    },
+    [mode.type, search, closePalette],
+  );
 
-  // Get all items for edit/remove modes
-  const getAllItems = useCallback(() => {
-    const items: { category: CategoryName; item: BudgetItem }[] = [];
-    const categories: CategoryName[] = ["income", "needs", "wants", "savings"];
+  const categories = getSortedCategories(state);
+  const incomeItems = getSortedIncomeItems(state);
+  const unassignedItems = getItemsForCategory(state, null);
+  const incomeColor = getIncomeColor(designLanguage);
 
-    for (const category of categories) {
-      for (const item of state.categories[category].items) {
-        items.push({ category, item });
-      }
-    }
+  const totalItems = incomeItems.length + state.budgetItems.length;
+  const hasItems = totalItems > 0;
+  const hasBudgetItems = state.budgetItems.length > 0;
+  const hasCategories = categories.length > 0;
+  const hasSavedBudgets = savedBudgets.length > 0;
 
-    return items;
-  }, [state.categories]);
-
-  // Handle command selection
   const handleSelect = useCallback(
     (action: string) => {
       switch (action) {
         case "add-income":
-          setMode({ type: "add", category: "income" });
+          setMode({ type: "add", target: { type: "income" } });
           setSearch("");
           break;
-        case "add-needs":
-          setMode({ type: "add", category: "needs" });
+        case "add-to-category":
+          setMode({ type: "add-pick-category" });
           setSearch("");
           break;
-        case "add-wants":
-          setMode({ type: "add", category: "wants" });
+        case "add-category":
+          setMode({ type: "add-category" });
           setSearch("");
           break;
-        case "add-savings":
-          setMode({ type: "add", category: "savings" });
+        case "rename-category":
+          setMode({ type: "rename-category-pick" });
+          setSearch("");
+          break;
+        case "delete-category":
+          setMode({ type: "delete-category-pick" });
+          setSearch("");
+          break;
+        case "set-target":
+          setMode({ type: "set-target-pick" });
+          setSearch("");
+          break;
+        case "move-item":
+          setMode({ type: "move-item-search" });
           setSearch("");
           break;
         case "edit":
@@ -220,50 +232,145 @@ export function CommandPalette() {
           break;
       }
     },
-    [theme, setTheme, closePalette, router, setDesignLanguage]
+    [theme, setTheme, closePalette, router, setDesignLanguage],
   );
 
-  // Handle item selection for edit
-  const handleEditItem = useCallback(
-    (category: CategoryName, item: BudgetItem) => {
-      setMode({ type: "edit-form", category, item });
-      setSearch("");
-    },
-    []
-  );
-
-  // Handle item removal
-  const handleRemoveItem = useCallback(
-    (category: CategoryName, itemId: string) => {
-      removeItem(category, itemId);
-      // If no more items, go back to default mode
-      const remainingItems = getAllItems().filter(
-        (i) => !(i.category === category && i.item.id === itemId)
-      );
-      if (remainingItems.length === 0) {
-        setMode({ type: "default" });
-      }
-    },
-    [removeItem, getAllItems]
-  );
-
-  // Handle clear confirmation
   const handleClearConfirm = useCallback(() => {
     clearAllData();
     closePalette();
   }, [clearAllData, closePalette]);
 
-  // Don't render until hydrated
   if (!isHydrated) return null;
 
-  const allItems = getAllItems();
-  const hasItems = allItems.length > 0;
-  const hasSavedBudgets = savedBudgets.length > 0;
+  // --- Search list helpers (edit / remove) ---
+  const renderItemSearch = (action: "edit" | "remove") => {
+    const onSelectIncome = (item: { id: string; label: string; amount: number }) => {
+      if (action === "remove") {
+        removeIncomeItem(item.id);
+        if (totalItems - 1 === 0) setMode({ type: "default" });
+      } else {
+        setMode({ type: "edit-form", itemKind: "income", item });
+        setSearch("");
+      }
+    };
+    const onSelectBudget = (item: { id: string; label: string; amount: number }) => {
+      if (action === "remove") {
+        removeBudgetItem(item.id);
+        if (totalItems - 1 === 0) setMode({ type: "default" });
+      } else {
+        setMode({ type: "edit-form", itemKind: "budget", item });
+        setSearch("");
+      }
+    };
+
+    return (
+      <>
+        {incomeItems.length > 0 && (
+          <Command.Group heading="Income" className={groupClass}>
+            {incomeItems.map((item) => (
+              <Command.Item
+                key={item.id}
+                value={`${item.label} income`}
+                onSelect={() => onSelectIncome(item)}
+                className={
+                  action === "remove"
+                    ? "flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-destructive/10 aria-selected:text-destructive"
+                    : itemClass
+                }
+              >
+                <Wallet className="size-4" style={{ color: incomeColor }} />
+                <span className="flex-1 truncate">{item.label}</span>
+                <span className="text-sm text-muted-foreground font-mono">{formatCurrency(item.amount)}</span>
+                {action === "remove" && <Trash2 className="size-4 opacity-50" />}
+              </Command.Item>
+            ))}
+          </Command.Group>
+        )}
+
+        {categories.map((category) => {
+          const items = getItemsForCategory(state, category.id);
+          if (items.length === 0) return null;
+          const color = resolveCategoryColor(category.colorToken, category.sortOrder, designLanguage);
+          return (
+            <Command.Group key={category.id} heading={category.name} className={groupClass}>
+              {items.map((item) => (
+                <Command.Item
+                  key={item.id}
+                  value={`${item.label} ${category.name}`}
+                  onSelect={() => onSelectBudget(item)}
+                  className={
+                    action === "remove"
+                      ? "flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-destructive/10 aria-selected:text-destructive"
+                      : itemClass
+                  }
+                >
+                  <Tag className="size-4" style={{ color }} />
+                  <span className="flex-1 truncate">{item.label}</span>
+                  <span className="text-sm text-muted-foreground font-mono">{formatCurrency(item.amount)}</span>
+                  {action === "remove" && <Trash2 className="size-4 opacity-50" />}
+                </Command.Item>
+              ))}
+            </Command.Group>
+          );
+        })}
+
+        {unassignedItems.length > 0 && (
+          <Command.Group heading="Unassigned" className={groupClass}>
+            {unassignedItems.map((item) => (
+              <Command.Item
+                key={item.id}
+                value={`${item.label} unassigned`}
+                onSelect={() => onSelectBudget(item)}
+                className={
+                  action === "remove"
+                    ? "flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-destructive/10 aria-selected:text-destructive"
+                    : itemClass
+                }
+              >
+                <Inbox className="size-4 text-muted-foreground" />
+                <span className="flex-1 truncate">{item.label}</span>
+                <span className="text-sm text-muted-foreground font-mono">{formatCurrency(item.amount)}</span>
+                {action === "remove" && <Trash2 className="size-4 opacity-50" />}
+              </Command.Item>
+            ))}
+          </Command.Group>
+        )}
+      </>
+    );
+  };
+
+  const searchShell = (placeholder: string, children: React.ReactNode) => (
+    <>
+      <div className="flex items-center border-b border-border px-3">
+        <button
+          onClick={() => setMode({ type: "default" })}
+          className="p-1 hover:bg-muted rounded-md transition-colors mr-2"
+          aria-label="Go back"
+        >
+          <ArrowLeft className="size-4" />
+        </button>
+        <Search className="size-4 text-muted-foreground shrink-0" />
+        <Command.Input
+          value={search}
+          onValueChange={setSearch}
+          placeholder={placeholder}
+          className="flex-1 h-12 px-3 bg-transparent text-base outline-none placeholder:text-muted-foreground"
+          autoFocus
+        />
+        <KeyboardShortcut shortcut="ESC" />
+      </div>
+      <Command.List className="max-h-[calc(min(500px,80vh)-3rem)] overflow-y-auto p-2">
+        <Command.Empty className="py-6 text-center text-sm text-muted-foreground">
+          No results found.
+        </Command.Empty>
+        {children}
+      </Command.List>
+    </>
+  );
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
       <DialogPrimitive.Portal>
-        {/* Backdrop */}
         <DialogPrimitive.Overlay asChild>
           <motion.div
             initial={{ opacity: 0 }}
@@ -274,27 +381,18 @@ export function CommandPalette() {
           />
         </DialogPrimitive.Overlay>
 
-        {/* Dialog Content */}
-        <DialogPrimitive.Content
-          asChild
-          onEscapeKeyDown={(e) => e.preventDefault()}
-          onPointerDownOutside={closePalette}
-        >
+        <DialogPrimitive.Content asChild onEscapeKeyDown={(e) => e.preventDefault()} onPointerDownOutside={closePalette}>
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: -20 }}
-            animate={isClosing 
-              ? { opacity: 0, scale: 0.95, y: -20 } 
-              : { opacity: 1, scale: 1, y: 0 }
-            }
+            animate={isClosing ? { opacity: 0, scale: 0.95, y: -20 } : { opacity: 1, scale: 1, y: 0 }}
             transition={{ duration: 0.15, ease: "easeOut" }}
             className={cn(
               "fixed left-1/2 top-[20%] -translate-x-1/2 z-50",
               "w-full max-w-[calc(100vw-2rem)] sm:max-w-lg",
               "bg-popover border border-border rounded-xl shadow-2xl overflow-hidden",
-              "max-h-[min(500px,80vh)]"
+              "max-h-[min(500px,80vh)]",
             )}
           >
-            {/* Visually hidden title for accessibility */}
             <VisuallyHidden.Root>
               <DialogPrimitive.Title>Command Menu</DialogPrimitive.Title>
             </VisuallyHidden.Root>
@@ -302,525 +400,418 @@ export function CommandPalette() {
               Quick actions and commands for managing your budget
             </DialogPrimitive.Description>
 
-            {/* Command component with our escape handling */}
             <Command onKeyDown={handleKeyDown} label="Command Menu">
-        <AnimatePresence mode="wait">
-          {/* Default Mode - Command List */}
-          {mode.type === "default" && (
-            <motion.div
-              key="default"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.1 }}
-              onAnimationComplete={() => {
-                // Focus the input after enter animation completes
-                inputRef.current?.focus();
-              }}
-            >
-              {/* Search Input */}
-              <div className="flex items-center border-b border-border px-3">
-                <Search className="size-4 text-muted-foreground shrink-0" />
-                <Command.Input
-                  ref={inputRef}
-                  value={search}
-                  onValueChange={setSearch}
-                  placeholder="Type a command or search…"
-                  className="flex-1 h-12 px-3 bg-transparent text-base outline-none placeholder:text-muted-foreground"
-                />
-                <KeyboardShortcut shortcut="⌘K" />
-              </div>
-
-              {/* Command List */}
-              <Command.List className="max-h-[calc(min(500px,80vh)-3rem)] overflow-y-auto p-2">
-                <Command.Empty className="py-6 text-center text-sm text-muted-foreground">
-                  No commands found.
-                </Command.Empty>
-
-                {/* Add Commands */}
-                <Command.Group heading="Add" className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-                  <Command.Item
-                    value="Add Income"
-                    onSelect={() => handleSelect("add-income")}
-                    className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
+              <AnimatePresence mode="wait">
+                {mode.type === "default" && (
+                  <motion.div
+                    key="default"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.1 }}
+                    onAnimationComplete={() => inputRef.current?.focus()}
                   >
-                    <Wallet className="size-4" style={{ color: getCategoryColor("income", designLanguage) }} />
-                    <span className="flex-1">Add Income</span>
-                  </Command.Item>
-                  <Command.Item
-                    value="Add Need"
-                    onSelect={() => handleSelect("add-needs")}
-                    className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
-                  >
-                    <DollarSign className="size-4" style={{ color: getCategoryColor("needs", designLanguage) }} />
-                    <span className="flex-1">Add Need</span>
-                  </Command.Item>
-                  <Command.Item
-                    value="Add Want"
-                    onSelect={() => handleSelect("add-wants")}
-                    className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
-                  >
-                    <ShoppingBag className="size-4" style={{ color: getCategoryColor("wants", designLanguage) }} />
-                    <span className="flex-1">Add Want</span>
-                  </Command.Item>
-                  <Command.Item
-                    value="Add Saving"
-                    onSelect={() => handleSelect("add-savings")}
-                    className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
-                  >
-                    <PiggyBank className="size-4" style={{ color: getCategoryColor("savings", designLanguage) }} />
-                    <span className="flex-1">Add Saving</span>
-                  </Command.Item>
-                </Command.Group>
+                    <div className="flex items-center border-b border-border px-3">
+                      <Search className="size-4 text-muted-foreground shrink-0" />
+                      <Command.Input
+                        ref={inputRef}
+                        value={search}
+                        onValueChange={setSearch}
+                        placeholder="Type a command or search…"
+                        className="flex-1 h-12 px-3 bg-transparent text-base outline-none placeholder:text-muted-foreground"
+                      />
+                      <KeyboardShortcut shortcut="⌘K" />
+                    </div>
 
-                {/* Edit/Remove Commands - Only show if there are items */}
-                {hasItems && (
-                  <>
-                    <Command.Group heading="Edit" className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-                      <Command.Item
-                        value="Edit Item"
-                        onSelect={() => handleSelect("edit")}
-                        className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
-                      >
-                        <Pencil className="size-4" />
-                        <span className="flex-1">Edit Item…</span>
-                      </Command.Item>
-                    </Command.Group>
+                    <Command.List className="max-h-[calc(min(500px,80vh)-3rem)] overflow-y-auto p-2">
+                      <Command.Empty className="py-6 text-center text-sm text-muted-foreground">
+                        No commands found.
+                      </Command.Empty>
 
-                    <Command.Group heading="Remove" className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-                      <Command.Item
-                        value="Remove Item"
-                        onSelect={() => handleSelect("remove")}
-                        className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
-                      >
-                        <Trash2 className="size-4" />
-                        <span className="flex-1">Remove Item…</span>
-                      </Command.Item>
-                    </Command.Group>
-                  </>
+                      <Command.Group heading="Add" className={groupClass}>
+                        <Command.Item value="Add Income" onSelect={() => handleSelect("add-income")} className={itemClass}>
+                          <Wallet className="size-4" style={{ color: incomeColor }} />
+                          <span className="flex-1">Add Income</span>
+                        </Command.Item>
+                        {hasCategories && (
+                          <Command.Item value="Add budget to category" onSelect={() => handleSelect("add-to-category")} className={itemClass}>
+                            <Plus className="size-4" />
+                            <span className="flex-1">Add budget to category…</span>
+                          </Command.Item>
+                        )}
+                      </Command.Group>
+
+                      <Command.Group heading="Categories" className={groupClass}>
+                        <Command.Item value="Add Category" onSelect={() => handleSelect("add-category")} className={itemClass}>
+                          <Tag className="size-4" />
+                          <span className="flex-1">Add category…</span>
+                        </Command.Item>
+                        {hasCategories && (
+                          <>
+                            <Command.Item value="Rename Category" onSelect={() => handleSelect("rename-category")} className={itemClass}>
+                              <Pencil className="size-4" />
+                              <span className="flex-1">Rename category…</span>
+                            </Command.Item>
+                            <Command.Item value="Set Category Target" onSelect={() => handleSelect("set-target")} className={itemClass}>
+                              <Target className="size-4" />
+                              <span className="flex-1">Set category target…</span>
+                            </Command.Item>
+                            <Command.Item value="Delete Category" onSelect={() => handleSelect("delete-category")} className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-destructive/10 aria-selected:text-destructive">
+                              <Trash2 className="size-4" />
+                              <span className="flex-1">Delete category…</span>
+                            </Command.Item>
+                          </>
+                        )}
+                      </Command.Group>
+
+                      {hasItems && (
+                        <Command.Group heading="Items" className={groupClass}>
+                          <Command.Item value="Edit Item" onSelect={() => handleSelect("edit")} className={itemClass}>
+                            <Pencil className="size-4" />
+                            <span className="flex-1">Edit item…</span>
+                          </Command.Item>
+                          {hasBudgetItems && (
+                            <Command.Item value="Move Budget" onSelect={() => handleSelect("move-item")} className={itemClass}>
+                              <ArrowRightLeft className="size-4" />
+                              <span className="flex-1">Move budget to category…</span>
+                            </Command.Item>
+                          )}
+                          <Command.Item value="Remove Item" onSelect={() => handleSelect("remove")} className={itemClass}>
+                            <Trash2 className="size-4" />
+                            <span className="flex-1">Remove item…</span>
+                          </Command.Item>
+                        </Command.Group>
+                      )}
+
+                      <Command.Group heading="Budget" className={groupClass}>
+                        {hasItems && (
+                          <>
+                            <Command.Item value="Save Budget" onSelect={() => handleSelect("save-budget")} className={itemClass}>
+                              <Save className="size-4" />
+                              <span className="flex-1">Save Budget…</span>
+                            </Command.Item>
+                            <Command.Item value="Rename Budget" onSelect={() => handleSelect("rename-budget")} className={itemClass}>
+                              <Edit2 className="size-4" />
+                              <span className="flex-1">Rename Current Budget</span>
+                            </Command.Item>
+                            <Command.Item value="Share Budget" onSelect={() => handleSelect("share")} className={itemClass}>
+                              <Share2 className="size-4" />
+                              <span className="flex-1">Share Budget</span>
+                            </Command.Item>
+                          </>
+                        )}
+                        <Command.Item value="Import Budget" onSelect={() => handleSelect("import")} className={itemClass}>
+                          <Download className="size-4" />
+                          <span className="flex-1">Import Budget</span>
+                        </Command.Item>
+                        <Command.Item value="Switch Budget" onSelect={() => handleSelect("switch-budget")} className={itemClass}>
+                          <FolderOpen className="size-4" />
+                          <span className="flex-1">Switch Budget</span>
+                        </Command.Item>
+                        {hasSavedBudgets && (
+                          <>
+                            <Command.Item value="Rename Saved Budget" onSelect={() => handleSelect("rename-saved-budget")} className={itemClass}>
+                              <Edit2 className="size-4" />
+                              <span className="flex-1">Rename Saved Budget…</span>
+                            </Command.Item>
+                            <Command.Item value="Delete Saved Budget" onSelect={() => handleSelect("delete-saved-budget")} className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-destructive/10 aria-selected:text-destructive">
+                              <Trash2 className="size-4" />
+                              <span className="flex-1">Delete Saved Budget…</span>
+                            </Command.Item>
+                          </>
+                        )}
+                      </Command.Group>
+
+                      <Command.Group heading="Navigate" className={groupClass}>
+                        <Command.Item value="Start Onboarding" onSelect={() => handleSelect("onboarding")} className={itemClass}>
+                          <Sparkles className="size-4" />
+                          <span className="flex-1">Start Onboarding…</span>
+                        </Command.Item>
+                      </Command.Group>
+
+                      <Command.Group heading="Actions" className={groupClass}>
+                        <Command.Item value="Use Cyberpunk Design" onSelect={() => handleSelect("design-cyberpunk")} className={itemClass}>
+                          <Sparkles className="size-4" />
+                          <span className="flex-1">Use Cyberpunk Design</span>
+                          {designLanguage === "cyberpunk" && <Check className="size-4 text-muted-foreground" />}
+                        </Command.Item>
+                        <Command.Item value="Use Delight Design" onSelect={() => handleSelect("design-delight")} className={itemClass}>
+                          <Sparkles className="size-4" />
+                          <span className="flex-1">Use Delight Design</span>
+                          {designLanguage === "delight" && <Check className="size-4 text-muted-foreground" />}
+                        </Command.Item>
+                        <Command.Item value="Toggle Theme" onSelect={() => handleSelect("toggle-theme")} className={itemClass}>
+                          {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+                          <span className="flex-1">{theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}</span>
+                        </Command.Item>
+                        {hasItems && (
+                          <Command.Item value="Clear All Data" onSelect={() => handleSelect("clear")} className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground text-destructive">
+                            <X className="size-4" />
+                            <span className="flex-1">Clear All Data</span>
+                          </Command.Item>
+                        )}
+                      </Command.Group>
+                    </Command.List>
+
+                    <div className="border-t border-border px-3 py-2 flex items-center justify-between text-xs text-muted-foreground">
+                      <div className="flex items-center gap-4">
+                        <span className="flex items-center gap-1"><kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px] font-mono">↑↓</kbd>navigate</span>
+                        <span className="flex items-center gap-1"><kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px] font-mono">↵</kbd>select</span>
+                        <span className="flex items-center gap-1"><kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px] font-mono">esc</kbd>close</span>
+                      </div>
+                    </div>
+                  </motion.div>
                 )}
 
-                {/* Budget Management */}
-                <Command.Group heading="Budget" className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-                  {hasItems && (
-                    <>
+                {/* Pick a category to add a budget to */}
+                {mode.type === "add-pick-category" && (
+                  <motion.div key="add-pick" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }}>
+                    {searchShell("Choose a category…", (
+                      <>
+                        {categories.map((category) => {
+                          const color = resolveCategoryColor(category.colorToken, category.sortOrder, designLanguage);
+                          return (
+                            <Command.Item
+                              key={category.id}
+                              value={category.name}
+                              onSelect={() => setMode({ type: "add", target: { type: "category", categoryId: category.id } })}
+                              className={itemClass}
+                            >
+                              <Tag className="size-4" style={{ color }} />
+                              <span className="flex-1 truncate">{category.name}</span>
+                            </Command.Item>
+                          );
+                        })}
+                      </>
+                    ))}
+                  </motion.div>
+                )}
+
+                {mode.type === "add" && (
+                  <AddItemForm
+                    key="add-form"
+                    target={mode.target}
+                    onSuccess={() => { setMode({ type: "default" }); closePalette(); }}
+                    onCancel={() => setMode({ type: "default" })}
+                  />
+                )}
+
+                {mode.type === "edit-search" && (
+                  <motion.div key="edit-search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }}>
+                    {searchShell("Search items to edit…", renderItemSearch("edit"))}
+                  </motion.div>
+                )}
+
+                {mode.type === "edit-form" && (
+                  <EditItemForm
+                    key={`edit-${mode.item.id}`}
+                    itemKind={mode.itemKind}
+                    item={mode.item}
+                    onSuccess={() => { setMode({ type: "default" }); closePalette(); }}
+                    onCancel={() => setMode({ type: "edit-search" })}
+                  />
+                )}
+
+                {mode.type === "remove-search" && (
+                  <motion.div key="remove-search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }}>
+                    {searchShell("Search items to remove…", renderItemSearch("remove"))}
+                  </motion.div>
+                )}
+
+                {/* Move budget item: pick item */}
+                {mode.type === "move-item-search" && (
+                  <motion.div key="move-search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }}>
+                    {searchShell("Search a budget to move…", (
+                      <>
+                      {categories.map((category) => {
+                        const items = getItemsForCategory(state, category.id);
+                        if (items.length === 0) return null;
+                        return (
+                          <Command.Group key={category.id} heading={category.name} className={groupClass}>
+                            {items.map((item) => (
+                              <Command.Item
+                                key={item.id}
+                                value={`${item.label} ${category.name}`}
+                                onSelect={() => setMode({ type: "move-item-target", itemId: item.id, itemLabel: item.label })}
+                                className={itemClass}
+                              >
+                                <ArrowRightLeft className="size-4" />
+                                <span className="flex-1 truncate">{item.label}</span>
+                                <span className="text-sm text-muted-foreground font-mono">{formatCurrency(item.amount)}</span>
+                              </Command.Item>
+                            ))}
+                          </Command.Group>
+                        );
+                      })}
+                      {unassignedItems.length > 0 && (
+                        <Command.Group heading="Unassigned" className={groupClass}>
+                          {unassignedItems.map((item) => (
+                            <Command.Item
+                              key={item.id}
+                              value={`${item.label} unassigned`}
+                              onSelect={() => setMode({ type: "move-item-target", itemId: item.id, itemLabel: item.label })}
+                              className={itemClass}
+                            >
+                              <ArrowRightLeft className="size-4" />
+                              <span className="flex-1 truncate">{item.label}</span>
+                              <span className="text-sm text-muted-foreground font-mono">{formatCurrency(item.amount)}</span>
+                            </Command.Item>
+                          ))}
+                        </Command.Group>
+                      )}
+                      </>
+                    ))}
+                  </motion.div>
+                )}
+
+                {/* Move budget item: pick destination */}
+                {mode.type === "move-item-target" && (
+                  <motion.div key="move-target" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }}>
+                    <div className="flex items-center border-b border-border px-3">
+                      <button onClick={() => setMode({ type: "move-item-search" })} className="p-1 hover:bg-muted rounded-md transition-colors mr-2" aria-label="Go back">
+                        <ArrowLeft className="size-4" />
+                      </button>
+                      <Search className="size-4 text-muted-foreground shrink-0" />
+                      <Command.Input value={search} onValueChange={setSearch} placeholder={`Move “${mode.itemLabel}” to…`} className="flex-1 h-12 px-3 bg-transparent text-base outline-none placeholder:text-muted-foreground" autoFocus />
+                      <KeyboardShortcut shortcut="ESC" />
+                    </div>
+                    <Command.List className="max-h-[calc(min(500px,80vh)-3rem)] overflow-y-auto p-2">
+                      <Command.Empty className="py-6 text-center text-sm text-muted-foreground">No categories found.</Command.Empty>
+                      {categories.map((category) => {
+                        const color = resolveCategoryColor(category.colorToken, category.sortOrder, designLanguage);
+                        return (
+                          <Command.Item
+                            key={category.id}
+                            value={category.name}
+                            onSelect={() => { moveBudgetItem(mode.itemId, category.id); setMode({ type: "default" }); closePalette(); }}
+                            className={itemClass}
+                          >
+                            <Tag className="size-4" style={{ color }} />
+                            <span className="flex-1 truncate">{category.name}</span>
+                          </Command.Item>
+                        );
+                      })}
                       <Command.Item
-                        value="Save Budget"
-                        onSelect={() => handleSelect("save-budget")}
-                        className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
+                        value="Unassigned"
+                        onSelect={() => { moveBudgetItem(mode.itemId, null); setMode({ type: "default" }); closePalette(); }}
+                        className={itemClass}
                       >
-                        <Save className="size-4" />
-                        <span className="flex-1">Save Budget…</span>
+                        <Inbox className="size-4 text-muted-foreground" />
+                        <span className="flex-1">Unassigned</span>
                       </Command.Item>
-                      <Command.Item
-                        value="Rename Budget"
-                        onSelect={() => handleSelect("rename-budget")}
-                        className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
-                      >
-                        <Edit2 className="size-4" />
-                        <span className="flex-1">Rename Current Budget</span>
-                      </Command.Item>
-                      <Command.Item
-                        value="Share Budget"
-                        onSelect={() => handleSelect("share")}
-                        className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
-                      >
-                        <Share2 className="size-4" />
-                        <span className="flex-1">Share Budget</span>
-                      </Command.Item>
-                    </>
-                  )}
-                  <Command.Item
-                    value="Import Budget"
-                    onSelect={() => handleSelect("import")}
-                    className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
-                  >
-                    <Download className="size-4" />
-                    <span className="flex-1">Import Budget</span>
-                  </Command.Item>
-                  <Command.Item
-                    value="Switch Budget"
-                    onSelect={() => handleSelect("switch-budget")}
-                    className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
-                  >
-                    <FolderOpen className="size-4" />
-                    <span className="flex-1">Switch Budget</span>
-                  </Command.Item>
-                  {hasSavedBudgets && (
-                    <>
-                      <Command.Item
-                        value="Rename Saved Budget"
-                        onSelect={() => handleSelect("rename-saved-budget")}
-                        className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
-                      >
-                        <Edit2 className="size-4" />
-                        <span className="flex-1">Rename Saved Budget…</span>
-                      </Command.Item>
-                      <Command.Item
-                        value="Delete Saved Budget"
-                        onSelect={() => handleSelect("delete-saved-budget")}
-                        className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-destructive/10 aria-selected:text-destructive"
-                      >
-                        <Trash2 className="size-4" />
-                        <span className="flex-1">Delete Saved Budget…</span>
-                      </Command.Item>
-                    </>
-                  )}
-                </Command.Group>
+                    </Command.List>
+                  </motion.div>
+                )}
 
-                {/* Navigate */}
-                <Command.Group heading="Navigate" className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-                  <Command.Item
-                    value="Start Onboarding"
-                    onSelect={() => handleSelect("onboarding")}
-                    className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
-                  >
-                    <Sparkles className="size-4" />
-                    <span className="flex-1">Start Onboarding…</span>
-                  </Command.Item>
-                </Command.Group>
+                {mode.type === "add-category" && (
+                  <CategoryNameForm
+                    key="add-category"
+                    mode="add"
+                    onSubmit={(name) => { addCategory(name); setMode({ type: "default" }); closePalette(); }}
+                    onCancel={() => setMode({ type: "default" })}
+                  />
+                )}
 
-                {/* Actions */}
-                <Command.Group heading="Actions" className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
-                  <Command.Item
-                    value="Use Cyberpunk Design"
-                    onSelect={() => handleSelect("design-cyberpunk")}
-                    className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
-                  >
-                    <Sparkles className="size-4" />
-                    <span className="flex-1">
-                      Use Cyberpunk Design
-                    </span>
-                    {designLanguage === "cyberpunk" && (
-                      <Check className="size-4 text-muted-foreground" />
-                    )}
-                  </Command.Item>
-                  <Command.Item
-                    value="Use Delight Design"
-                    onSelect={() => handleSelect("design-delight")}
-                    className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
-                  >
-                    <Sparkles className="size-4" />
-                    <span className="flex-1">
-                      Use Delight Design
-                    </span>
-                    {designLanguage === "delight" && (
-                      <Check className="size-4 text-muted-foreground" />
-                    )}
-                  </Command.Item>
-                  <Command.Item
-                    value="Toggle Theme"
-                    onSelect={() => handleSelect("toggle-theme")}
-                    className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
-                  >
-                    {theme === "dark" ? (
-                      <Sun className="size-4" />
-                    ) : (
-                      <Moon className="size-4" />
-                    )}
-                    <span className="flex-1">
-                      {theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
-                    </span>
-                  </Command.Item>
-                  {hasItems && (
-                    <Command.Item
-                      value="Clear All Data"
-                      onSelect={() => handleSelect("clear")}
-                      className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground text-destructive"
-                    >
-                      <X className="size-4" />
-                      <span className="flex-1">Clear All Data</span>
-                    </Command.Item>
-                  )}
-                </Command.Group>
-              </Command.List>
+                {mode.type === "rename-category-pick" && (
+                  <motion.div key="rename-pick" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }}>
+                    {searchShell("Choose a category to rename…", (
+                      <>
+                        {categories.map((category) => (
+                          <Command.Item key={category.id} value={category.name} onSelect={() => setMode({ type: "rename-category", categoryId: category.id })} className={itemClass}>
+                            <Pencil className="size-4" />
+                            <span className="flex-1 truncate">{category.name}</span>
+                          </Command.Item>
+                        ))}
+                      </>
+                    ))}
+                  </motion.div>
+                )}
 
-              {/* Footer hint */}
-              <div className="border-t border-border px-3 py-2 flex items-center justify-between text-xs text-muted-foreground">
-                <div className="flex items-center gap-4">
-                  <span className="flex items-center gap-1">
-                    <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px] font-mono">↑↓</kbd>
-                    navigate
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px] font-mono">↵</kbd>
-                    select
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px] font-mono">esc</kbd>
-                    close
-                  </span>
-                </div>
-              </div>
-            </motion.div>
-          )}
+                {mode.type === "rename-category" && (
+                  <CategoryNameForm
+                    key={`rename-${mode.categoryId}`}
+                    mode="rename"
+                    initialName={getCategoryById(state, mode.categoryId)?.name ?? ""}
+                    onSubmit={(name) => { renameCategory(mode.categoryId, name); setMode({ type: "default" }); closePalette(); }}
+                    onCancel={() => setMode({ type: "rename-category-pick" })}
+                  />
+                )}
 
-          {/* Add Mode */}
-          {mode.type === "add" && (
-            <AddItemForm
-              key={`add-${mode.category}`}
-              category={mode.category}
-              onSuccess={() => {
-                setMode({ type: "default" });
-                closePalette();
-              }}
-              onCancel={() => setMode({ type: "default" })}
-            />
-          )}
+                {mode.type === "set-target-pick" && (
+                  <motion.div key="target-pick" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }}>
+                    {searchShell("Choose a category…", (
+                      <>
+                        {categories.map((category) => (
+                          <Command.Item key={category.id} value={category.name} onSelect={() => setMode({ type: "set-target", categoryId: category.id })} className={itemClass}>
+                            <Target className="size-4" />
+                            <span className="flex-1 truncate">{category.name}</span>
+                            <span className="text-sm text-muted-foreground font-mono">{category.targetPercentage}%</span>
+                          </Command.Item>
+                        ))}
+                      </>
+                    ))}
+                  </motion.div>
+                )}
 
-          {/* Edit Search Mode */}
-          {mode.type === "edit-search" && (
-            <motion.div
-              key="edit-search"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.1 }}
-            >
-              {/* Search Input */}
-              <div className="flex items-center border-b border-border px-3">
-                <button
-                  onClick={() => setMode({ type: "default" })}
-                  className="p-1 hover:bg-muted rounded-md transition-colors mr-2"
-                  aria-label="Go back"
-                >
-                  <Plus className="size-4 rotate-45" />
-                </button>
-                <Search className="size-4 text-muted-foreground shrink-0" />
-                <Command.Input
-                  value={search}
-                  onValueChange={setSearch}
-                  placeholder="Search items to edit…"
-                  className="flex-1 h-12 px-3 bg-transparent text-base outline-none placeholder:text-muted-foreground"
-                  autoFocus
-                />
-                <KeyboardShortcut shortcut="ESC" />
-              </div>
+                {mode.type === "set-target" && (
+                  <SetTargetForm
+                    key={`target-${mode.categoryId}`}
+                    categoryName={getCategoryById(state, mode.categoryId)?.name ?? ""}
+                    initialValue={getCategoryById(state, mode.categoryId)?.targetPercentage ?? 0}
+                    onSubmit={(value) => { updateCategoryTarget(mode.categoryId, value); setMode({ type: "default" }); closePalette(); }}
+                    onCancel={() => setMode({ type: "set-target-pick" })}
+                  />
+                )}
 
-              {/* Items List */}
-              <Command.List className="max-h-[calc(min(500px,80vh)-3rem)] overflow-y-auto p-2">
-                <Command.Empty className="py-6 text-center text-sm text-muted-foreground">
-                  No items found.
-                </Command.Empty>
+                {mode.type === "delete-category-pick" && (
+                  <motion.div key="delete-pick" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }}>
+                    {searchShell("Choose a category to delete…", (
+                      <>
+                        {categories.map((category) => {
+                          const count = getItemsForCategory(state, category.id).length;
+                          return (
+                            <Command.Item
+                              key={category.id}
+                              value={category.name}
+                              onSelect={() => { deleteCategory(category.id, "keep"); if (categories.length === 1) setMode({ type: "default" }); }}
+                              className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-destructive/10 aria-selected:text-destructive"
+                            >
+                              <Trash2 className="size-4" />
+                              <span className="flex-1 truncate">{category.name}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {count > 0 ? `${count} item${count === 1 ? "" : "s"} → Unassigned` : "empty"}
+                              </span>
+                            </Command.Item>
+                          );
+                        })}
+                      </>
+                    ))}
+                  </motion.div>
+                )}
 
-                {(["income", "needs", "wants", "savings"] as CategoryName[]).map((category) => {
-                  const items = state.categories[category].items;
-                  if (items.length === 0) return null;
-
-                  const config = CATEGORY_CONFIG[category];
-                  const Icon = CATEGORY_ICONS[category];
-
-                  return (
-                    <Command.Group
-                      key={category}
-                      heading={config.label}
-                      className="px-2 py-1.5 text-xs font-medium text-muted-foreground"
-                    >
-                      {items.map((item) => (
-                        <Command.Item
-                          key={item.id}
-                          value={`${item.label} ${category}`}
-                          onSelect={() => handleEditItem(category, item)}
-                          className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-accent aria-selected:text-accent-foreground"
-                        >
-                          <Icon
-                            className="size-4"
-                            style={{ color: getCategoryColor(category, designLanguage) }}
-                          />
-                          <span className="flex-1 truncate">{item.label}</span>
-                          <span className="text-sm text-muted-foreground font-mono">
-                            {formatCurrency(item.amount)}
-                          </span>
-                        </Command.Item>
-                      ))}
-                    </Command.Group>
-                  );
-                })}
-              </Command.List>
-            </motion.div>
-          )}
-
-          {/* Edit Form Mode */}
-          {mode.type === "edit-form" && (
-            <EditItemForm
-              key={`edit-${mode.item.id}`}
-              category={mode.category}
-              item={mode.item}
-              onSuccess={() => {
-                setMode({ type: "default" });
-                closePalette();
-              }}
-              onCancel={() => setMode({ type: "edit-search" })}
-            />
-          )}
-
-          {/* Remove Search Mode */}
-          {mode.type === "remove-search" && (
-            <motion.div
-              key="remove-search"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.1 }}
-            >
-              {/* Search Input */}
-              <div className="flex items-center border-b border-border px-3">
-                <button
-                  onClick={() => setMode({ type: "default" })}
-                  className="p-1 hover:bg-muted rounded-md transition-colors mr-2"
-                  aria-label="Go back"
-                >
-                  <Plus className="size-4 rotate-45" />
-                </button>
-                <Search className="size-4 text-muted-foreground shrink-0" />
-                <Command.Input
-                  value={search}
-                  onValueChange={setSearch}
-                  placeholder="Search items to remove…"
-                  className="flex-1 h-12 px-3 bg-transparent text-base outline-none placeholder:text-muted-foreground"
-                  autoFocus
-                />
-                <KeyboardShortcut shortcut="ESC" />
-              </div>
-
-              {/* Items List */}
-              <Command.List className="max-h-[calc(min(500px,80vh)-3rem)] overflow-y-auto p-2">
-                <Command.Empty className="py-6 text-center text-sm text-muted-foreground">
-                  No items found.
-                </Command.Empty>
-
-                {(["income", "needs", "wants", "savings"] as CategoryName[]).map((category) => {
-                  const items = state.categories[category].items;
-                  if (items.length === 0) return null;
-
-                  const config = CATEGORY_CONFIG[category];
-                  const Icon = CATEGORY_ICONS[category];
-
-                  return (
-                    <Command.Group
-                      key={category}
-                      heading={config.label}
-                      className="px-2 py-1.5 text-xs font-medium text-muted-foreground"
-                    >
-                      {items.map((item) => (
-                        <Command.Item
-                          key={item.id}
-                          value={`${item.label} ${category}`}
-                          onSelect={() => handleRemoveItem(category, item.id)}
-                          className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-destructive/10 aria-selected:text-destructive"
-                        >
-                          <Icon
-                            className="size-4"
-                            style={{ color: getCategoryColor(category, designLanguage) }}
-                          />
-                          <span className="flex-1 truncate">{item.label}</span>
-                          <span className="text-sm text-muted-foreground font-mono">
-                            {formatCurrency(item.amount)}
-                          </span>
-                          <Trash2 className="size-4 opacity-50" />
-                        </Command.Item>
-                      ))}
-                    </Command.Group>
-                  );
-                })}
-              </Command.List>
-
-              {/* Footer hint */}
-              <div className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
-                Press <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px] font-mono">↵</kbd> to remove selected item
-              </div>
-            </motion.div>
-          )}
-
-          {/* Clear Confirmation Mode */}
-          {mode.type === "confirm-clear" && (
-            <ClearConfirmation
-              key="confirm-clear"
-              onConfirm={handleClearConfirm}
-              onCancel={() => setMode({ type: "default" })}
-            />
-          )}
-
-          {/* Share Budget Mode */}
-          {mode.type === "share" && (
-            <ShareBudgetView
-              key="share"
-              onCancel={() => setMode({ type: "default" })}
-            />
-          )}
-
-          {/* Import Budget Mode */}
-          {mode.type === "import" && (
-            <ImportBudgetView
-              key="import"
-              onCancel={() => setMode({ type: "default" })}
-              onSuccess={() => {
-                setMode({ type: "default" });
-                closePalette();
-              }}
-            />
-          )}
-
-          {/* Switch Budget Mode */}
-          {mode.type === "switch-budget" && (
-            <SwitchBudgetView
-              key="switch-budget"
-              onCancel={() => setMode({ type: "default" })}
-              onSuccess={() => {
-                setMode({ type: "default" });
-                closePalette();
-              }}
-            />
-          )}
-
-          {/* Rename Budget Mode */}
-          {mode.type === "rename-budget" && (
-            <RenameBudgetView
-              key="rename-budget"
-              onCancel={() => setMode({ type: "default" })}
-              onSuccess={() => {
-                setMode({ type: "default" });
-                closePalette();
-              }}
-            />
-          )}
-
-          {/* Save Budget Mode */}
-          {mode.type === "save-budget" && (
-            <SaveBudgetView
-              key="save-budget"
-              onCancel={() => setMode({ type: "default" })}
-              onSuccess={() => {
-                setMode({ type: "default" });
-                closePalette();
-              }}
-            />
-          )}
-
-          {/* Rename Saved Budget Mode */}
-          {mode.type === "rename-saved-budget" && (
-            <RenameSavedBudgetView
-              key="rename-saved-budget"
-              onCancel={() => setMode({ type: "default" })}
-              onSuccess={() => {
-                setMode({ type: "default" });
-                closePalette();
-              }}
-            />
-          )}
-
-          {/* Delete Saved Budget Mode */}
-          {mode.type === "delete-saved-budget" && (
-            <DeleteSavedBudgetView
-              key="delete-saved-budget"
-              onCancel={() => setMode({ type: "default" })}
-              onSuccess={() => {
-                setMode({ type: "default" });
-                closePalette();
-              }}
-            />
-          )}
-        </AnimatePresence>
+                {mode.type === "confirm-clear" && (
+                  <ClearConfirmation key="confirm-clear" onConfirm={handleClearConfirm} onCancel={() => setMode({ type: "default" })} />
+                )}
+                {mode.type === "share" && <ShareBudgetView key="share" onCancel={() => setMode({ type: "default" })} />}
+                {mode.type === "import" && (
+                  <ImportBudgetView key="import" onCancel={() => setMode({ type: "default" })} onSuccess={() => { setMode({ type: "default" }); closePalette(); }} />
+                )}
+                {mode.type === "switch-budget" && (
+                  <SwitchBudgetView key="switch-budget" onCancel={() => setMode({ type: "default" })} onSuccess={() => { setMode({ type: "default" }); closePalette(); }} />
+                )}
+                {mode.type === "rename-budget" && (
+                  <RenameBudgetView key="rename-budget" onCancel={() => setMode({ type: "default" })} onSuccess={() => { setMode({ type: "default" }); closePalette(); }} />
+                )}
+                {mode.type === "save-budget" && (
+                  <SaveBudgetView key="save-budget" onCancel={() => setMode({ type: "default" })} onSuccess={() => { setMode({ type: "default" }); closePalette(); }} />
+                )}
+                {mode.type === "rename-saved-budget" && (
+                  <RenameSavedBudgetView key="rename-saved-budget" onCancel={() => setMode({ type: "default" })} onSuccess={() => { setMode({ type: "default" }); closePalette(); }} />
+                )}
+                {mode.type === "delete-saved-budget" && (
+                  <DeleteSavedBudgetView key="delete-saved-budget" onCancel={() => setMode({ type: "default" })} onSuccess={() => { setMode({ type: "default" }); closePalette(); }} />
+                )}
+              </AnimatePresence>
             </Command>
           </motion.div>
         </DialogPrimitive.Content>

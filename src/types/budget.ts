@@ -1,27 +1,22 @@
+// ---------------------------------------------------------------------------
+// Shared primitives
+// ---------------------------------------------------------------------------
+
 export interface BudgetItem {
   id: string;
   label: string;
   amount: number;
 }
 
+// ---------------------------------------------------------------------------
+// Legacy (v2) static category model — retained for seeding defaults,
+// onboarding copy, and migrating older persisted/shared data.
+// ---------------------------------------------------------------------------
+
 export type CategoryName = "needs" | "wants" | "savings" | "income";
 export type SpendingCategoryName = "needs" | "wants" | "savings";
 
-export interface BudgetCategory {
-  name: CategoryName;
-  targetPercentage: number;
-  items: BudgetItem[];
-  color: string;
-}
-
 export type TargetPercentages = Record<SpendingCategoryName, number>;
-
-export interface BudgetState {
-  categories: Record<CategoryName, BudgetCategory>;
-  targetPercentages: TargetPercentages;
-  selectedCategory: CategoryName | "unbudgeted" | null;
-  currentBudgetName?: string;
-}
 
 export const CATEGORY_CONFIG: Record<
   CategoryName,
@@ -33,12 +28,102 @@ export const CATEGORY_CONFIG: Record<
   income: { targetPercentage: 0, color: "#8b5cf6", label: "Income" },
 };
 
-// Serialization types for sharing budgets
+// ---------------------------------------------------------------------------
+// v3 dynamic domain model
+//
+// A BudgetPlan owns three normalized collections keyed by stable IDs:
+//   - incomeItems:  income sources (kept separate from spending categories)
+//   - categories:   user-defined spending categories (ordered, renameable)
+//   - budgetItems:  line items, each pointing at zero or one category
+//
+// A budget item with categoryId === null is "unassigned" (orphaned). This
+// leaves room for the future "budget of budgets" / subcategory work via
+// BudgetCategory.parentCategoryId without another migration.
+// ---------------------------------------------------------------------------
+
+export type BudgetPlanId = string;
+export type BudgetCategoryId = string;
+export type BudgetItemId = string;
+
+/** Pseudo-selection ids that are not real category ids. */
+export type SpecialSelectionId = "income" | "unassigned" | "unbudgeted";
+
+export interface IncomeItem {
+  id: string;
+  label: string;
+  amount: number;
+  sortOrder: number;
+}
+
+export interface BudgetCategory {
+  id: BudgetCategoryId;
+  name: string;
+  targetPercentage: number;
+  /** Stable hex color. Derived from the design-language palette at creation. */
+  colorToken: string;
+  sortOrder: number;
+  /** Reserved for future subcategories / budget-of-budgets. */
+  parentCategoryId?: BudgetCategoryId | null;
+  isDefault?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface BudgetLineItem {
+  id: BudgetItemId;
+  label: string;
+  amount: number;
+  /** null = unassigned / orphaned. */
+  categoryId: BudgetCategoryId | null;
+  sortOrder: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface BudgetPlanSettings {
+  /** What happens to a category's items when the category is deleted. */
+  unassignedBehavior: "keep" | "delete";
+}
+
+export interface BudgetPlan {
+  id: BudgetPlanId;
+  name?: string;
+  schemaVersion: 3;
+  incomeItems: IncomeItem[];
+  categories: BudgetCategory[];
+  budgetItems: BudgetLineItem[];
+  settings: BudgetPlanSettings;
+  /** Transient UI selection — not persisted as meaningful data. */
+  selectedCategoryId: BudgetCategoryId | SpecialSelectionId | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Serialization (sharing / import-export)
+// ---------------------------------------------------------------------------
+
 export interface SerializedBudgetItem {
   label: string;
   amount: number;
 }
 
+/** v3 share payload — IDs are stripped and regenerated on import. */
+export interface SerializedCategoryV3 {
+  name: string;
+  targetPercentage: number;
+  items: SerializedBudgetItem[];
+}
+
+export interface SerializedBudgetV3 {
+  version: 3;
+  name?: string;
+  income: SerializedBudgetItem[];
+  categories: SerializedCategoryV3[];
+  unassigned?: SerializedBudgetItem[];
+}
+
+/** Legacy v2 share payload (no version field). */
 export interface SerializedBudget {
   items: {
     needs: SerializedBudgetItem[];
@@ -53,11 +138,16 @@ export interface SerializedBudget {
   };
 }
 
-// Saved budget types for multi-budget storage
+export type AnySerializedBudget = SerializedBudgetV3 | SerializedBudget;
+
+// ---------------------------------------------------------------------------
+// Saved budgets (multi-budget storage)
+// ---------------------------------------------------------------------------
+
 export interface SavedBudget {
   id: string;
   name: string;
   createdAt: string;
   lastModifiedAt: string;
-  data: SerializedBudget;
+  data: SerializedBudgetV3;
 }

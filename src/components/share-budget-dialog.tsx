@@ -15,10 +15,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useBudget } from "@/lib/budget-context";
 import { encodeBudget, generateShareUrl } from "@/lib/budget-serialization";
+import { hasPlanData } from "@/lib/budget-plan";
 import { Share2, Copy, Check, Link, Code } from "lucide-react";
 
 export function ShareBudgetDialog() {
-  const { state, getTotalIncome, isHydrated } = useBudget();
+  const { state, isHydrated } = useBudget();
   const [isOpen, setIsOpen] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
@@ -53,10 +54,7 @@ export function ShareBudgetDialog() {
     }
   };
 
-  const totalIncome = getTotalIncome();
-  const hasData = totalIncome > 0 || state.categories.needs.items.length > 0 || 
-                  state.categories.wants.items.length > 0 || 
-                  state.categories.savings.items.length > 0;
+  const hasData = hasPlanData(state);
 
   if (!isHydrated) return null;
 
