@@ -5,18 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   BudgetProvider,
-  CURRENT_BUDGET_STORAGE_KEY,
+  readStoredPlanHasData,
   useBudget,
 } from "@/lib/budget-context";
 import { BudgetColumns } from "@/components/budget-columns";
 import { BudgetPieChart } from "@/components/budget-pie-chart";
 import { CategoryBreakdown } from "@/components/category-breakdown";
 import { ThemeToggle } from "@/components/theme-toggle";
-import {
-  CATEGORY_CONFIG,
-  CategoryName,
-  SpendingCategoryName,
-} from "@/types/budget";
 import { Command } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
@@ -36,43 +31,24 @@ import {
   useSyncExternalStore,
 } from "react";
 import { useDesignLanguage } from "@/lib/design-language-context";
-import { getCategoryColor } from "@/lib/design-language";
+import { resolveCategoryColor } from "@/lib/design-language";
+import { getSortedCategories, hasPlanData } from "@/lib/budget-plan";
 import { hasSkippedOnboarding } from "@/lib/onboarding-gate";
 import { cn } from "@/lib/utils";
+
 const emptySubscribe = () => () => {};
 
 function useIsHydrated() {
   return useSyncExternalStore(emptySubscribe, () => true, () => false);
 }
 
-function hasStoredBudgetItems() {
-  try {
-    const stored = localStorage.getItem(CURRENT_BUDGET_STORAGE_KEY);
-    if (!stored) return false;
-
-    const parsed = JSON.parse(stored);
-    const budgetData = parsed?.currentBudget;
-    return (["income", "needs", "wants", "savings"] as const).some(
-      (category) =>
-        Array.isArray(budgetData?.categories?.[category]?.items) &&
-        budgetData.categories[category].items.length > 0
-    );
-  } catch {
-    return false;
-  }
-}
-
 function CurrentBudgetName() {
-  const { state, setCurrentBudgetName, isHydrated, getTotalIncome } = useBudget();
+  const { state, setCurrentBudgetName, isHydrated } = useBudget();
   const [isEditing, setIsEditing] = useState(false);
   const [draftName, setDraftName] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const totalIncome = getTotalIncome();
-  const hasData = totalIncome > 0 || 
-                  state.categories.needs.items.length > 0 || 
-                  state.categories.wants.items.length > 0 || 
-                  state.categories.savings.items.length > 0;
+  const hasData = hasPlanData(state);
 
   useEffect(() => {
     if (isEditing) {
@@ -87,9 +63,7 @@ function CurrentBudgetName() {
     setIsEditing(false);
   }, [draftName, setCurrentBudgetName]);
 
-  const handleCancel = useCallback(() => {
-    setIsEditing(false);
-  }, []);
+  const handleCancel = useCallback(() => setIsEditing(false), []);
 
   if (!isHydrated || !hasData) return null;
 
@@ -113,29 +87,21 @@ function CurrentBudgetName() {
             placeholder="Enter budget name…"
             className="h-8 text-sm w-48"
           />
-          <button
-            onClick={handleSave}
-            className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-muted transition-colors"
-            aria-label="Save name"
-          >
+          <button onClick={handleSave} className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-muted transition-colors" aria-label="Save name">
             <Check className="h-4 w-4 text-green-600" />
           </button>
-          <button
-            onClick={handleCancel}
-            className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-muted transition-colors"
-            aria-label="Cancel"
-          >
+          <button onClick={handleCancel} className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-muted transition-colors" aria-label="Cancel">
             <X className="h-4 w-4 text-muted-foreground" />
           </button>
         </div>
       ) : (
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">
-            {state.currentBudgetName || "Budget"}
+            {state.name || "Budget"}
           </span>
           <button
             onClick={() => {
-              setDraftName(state.currentBudgetName || "");
+              setDraftName(state.name || "");
               setIsEditing(true);
             }}
             className="h-6 w-6 flex items-center justify-center rounded-md hover:bg-muted transition-colors"
@@ -150,13 +116,8 @@ function CurrentBudgetName() {
 }
 
 function GettingStarted() {
-  const { state, isHydrated, getTotalIncome } = useBudget();
-  const totalIncome = getTotalIncome();
-  const hasData =
-    totalIncome > 0 ||
-    state.categories.needs.items.length > 0 ||
-    state.categories.wants.items.length > 0 ||
-    state.categories.savings.items.length > 0;
+  const { state, isHydrated } = useBudget();
+  const hasData = hasPlanData(state);
 
   if (!isHydrated || hasData) return null;
 
@@ -168,19 +129,15 @@ function GettingStarted() {
       className="bg-card border border-border rounded-xl p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
     >
       <div className="min-w-0">
-        <h2 className="text-base sm:text-lg font-semibold">
-          New to Oversight?
-        </h2>
+        <h2 className="text-base sm:text-lg font-semibold">New to Oversight?</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Start a guided setup to fill Income, Needs, Wants, and Savings — then
-          land back on your dashboard.
+          Start a guided setup to fill in your income and categories — then land
+          back on your dashboard, where you can add, rename, or reorganize
+          categories any time.
         </p>
         <p className="text-xs text-muted-foreground mt-2">
           Tip: open the command menu with{" "}
-          <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px] font-mono">
-            ⌘K
-          </kbd>
-          .
+          <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px] font-mono">⌘K</kbd>.
         </p>
       </div>
       <div className="flex items-center gap-2">
@@ -193,23 +150,15 @@ function GettingStarted() {
 }
 
 function BudgetComparison() {
-  const {
-    getPercentageOfIncome,
-    getTotalIncome,
-    getUnbudgetedAmount,
-    getTargetPercentage,
-  } = useBudget();
+  const { state, getTotalIncome, getTotalForCategory, getUnbudgetedAmount } =
+    useBudget();
   const { designLanguage } = useDesignLanguage();
   const isDelight = designLanguage === "delight";
   const totalIncome = getTotalIncome();
   const unbudgeted = getUnbudgetedAmount();
+  const categories = getSortedCategories(state);
 
   if (totalIncome === 0) return null;
-
-  const categories: SpendingCategoryName[] = ["needs", "wants", "savings"];
-  const targetString = `${getTargetPercentage("needs")} / ${getTargetPercentage(
-    "wants"
-  )} / ${getTargetPercentage("savings")}`;
 
   return (
     <motion.div
@@ -219,14 +168,14 @@ function BudgetComparison() {
       className="bg-card border border-border rounded-xl p-4 sm:p-6 mt-6"
     >
       <h3 className="text-sm sm:text-base font-semibold mb-4 sm:mb-6 text-muted-foreground uppercase tracking-wide">
-        {targetString} Comparison (of Income)
+        Target vs Actual (of Income)
       </h3>
       <div className="space-y-5 sm:space-y-4">
         {categories.map((category, index) => {
-          const config = CATEGORY_CONFIG[category];
-          const categoryColor = getCategoryColor(category, designLanguage);
-          const actual = getPercentageOfIncome(category);
-          const target = getTargetPercentage(category);
+          const color = resolveCategoryColor(category.colorToken, category.sortOrder, designLanguage);
+          const total = getTotalForCategory(category.id);
+          const actual = totalIncome > 0 ? (total / totalIncome) * 100 : 0;
+          const target = category.targetPercentage;
           const diff = actual - target;
           const diffBadgeClass = isDelight
             ? Math.abs(diff) <= 5
@@ -242,30 +191,22 @@ function BudgetComparison() {
 
           return (
             <motion.div
-              key={category}
+              key={category.id}
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.15, delay: 0.12 + index * 0.05 }}
               className="space-y-2 sm:space-y-1.5"
             >
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
-                <span
-                  className={cn(
-                    "text-base sm:text-sm font-semibold",
-                    isDelight && "tracking-wide"
-                  )}
-                  style={{ color: categoryColor }}
-                >
-                  {config.label}
+                <span className={cn("text-base sm:text-sm font-semibold truncate", isDelight && "tracking-wide")} style={{ color }}>
+                  {category.name}
                 </span>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 text-sm">
                     <span className="text-muted-foreground">
                       Target: <strong>{target}%</strong>
                     </span>
-                    <span className="hidden sm:inline text-muted-foreground">
-                      •
-                    </span>
+                    <span className="hidden sm:inline text-muted-foreground">•</span>
                     <span className="font-semibold">
                       Actual: <strong>{actual.toFixed(1)}%</strong>
                     </span>
@@ -274,13 +215,9 @@ function BudgetComparison() {
                     initial={{ scale: 0.8, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ delay: 0.15 + index * 0.05 }}
-                    className={cn(
-                      "text-xs font-semibold px-2 py-1 rounded-md self-start",
-                      diffBadgeClass
-                    )}
+                    className={cn("text-xs font-semibold px-2 py-1 rounded-md self-start", diffBadgeClass)}
                   >
-                    {diff > 0 ? "+" : ""}
-                    {diff.toFixed(1)}%
+                    {diff > 0 ? "+" : ""}{diff.toFixed(1)}%
                   </motion.span>
                 </div>
               </div>
@@ -288,24 +225,15 @@ function BudgetComparison() {
                 <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${Math.min(actual, 100)}%` }}
-                  transition={{
-                    duration: 0.5,
-                    delay: 0.2 + index * 0.05,
-                    ease: "easeOut",
-                  }}
+                  transition={{ duration: 0.5, delay: 0.2 + index * 0.05, ease: "easeOut" }}
                   className="absolute left-0 h-full rounded-full"
-                  style={{ backgroundColor: categoryColor }}
+                  style={{ backgroundColor: color }}
                 />
-                <div
-                  className="absolute h-full w-0.5 bg-foreground/50"
-                  style={{ left: `${target}%` }}
-                  aria-hidden="true"
-                />
+                <div className="absolute h-full w-0.5 bg-foreground/50" style={{ left: `${Math.min(target, 100)}%` }} aria-hidden="true" />
               </div>
             </motion.div>
           );
         })}
-        {/* Unbudgeted Income Indicator */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -313,30 +241,19 @@ function BudgetComparison() {
           className="pt-4 border-t border-border"
         >
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
-            <span className="text-base sm:text-sm font-semibold text-muted-foreground">
-              Unbudgeted Income
-            </span>
+            <span className="text-base sm:text-sm font-semibold text-muted-foreground">Unbudgeted Income</span>
             <div className="flex items-center gap-2">
               <span className="text-base sm:text-sm font-semibold">
                 {formatCurrency(unbudgeted)} (
-                {totalIncome > 0
-                  ? ((unbudgeted / totalIncome) * 100).toFixed(1)
-                  : 0}
-                %)
+                {totalIncome > 0 ? ((unbudgeted / totalIncome) * 100).toFixed(1) : 0}%)
               </span>
             </div>
           </div>
           <div className="relative h-4 sm:h-3 bg-muted rounded-full overflow-hidden mt-3 sm:mt-2">
             <motion.div
               initial={{ width: 0 }}
-              animate={{
-                width: `${Math.min((unbudgeted / totalIncome) * 100, 100)}%`,
-              }}
-              transition={{
-                duration: 0.5,
-                delay: 0.3,
-                ease: "easeOut",
-              }}
+              animate={{ width: `${Math.min((unbudgeted / totalIncome) * 100, 100)}%` }}
+              transition={{ duration: 0.5, delay: 0.3, ease: "easeOut" }}
               className={`absolute left-0 h-full rounded-full ${
                 unbudgeted < 0
                   ? "bg-destructive"
@@ -369,30 +286,25 @@ function ChartSection() {
 
   return (
     <motion.div
-      key={state.selectedCategory || "main"}
+      key={state.selectedCategoryId || "main"}
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ duration: 0.15 }}
     >
-      {state.selectedCategory ? <CategoryBreakdown /> : <BudgetPieChart />}
+      {state.selectedCategoryId ? <CategoryBreakdown /> : <BudgetPieChart />}
     </motion.div>
   );
 }
 
 function ClearButton() {
-  const { clearAllData, getGrandTotal, isHydrated } = useBudget();
-  const total = getGrandTotal();
+  const { clearAllData, getTotalBudgeted, getTotalIncome, isHydrated } = useBudget();
+  const total = getTotalBudgeted() + getTotalIncome();
 
-  // Don't render until hydrated to avoid server/client mismatch
   if (!isHydrated || total === 0) return null;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.3 }}
-    >
+    <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.3 }}>
       <Button
         variant="ghost"
         size="sm"
@@ -411,23 +323,12 @@ function ClearButton() {
 
 function CommandPaletteButton() {
   const handleClick = () => {
-    // Dispatch a keyboard event to trigger the command palette
-    const event = new KeyboardEvent("keydown", {
-      key: "k",
-      metaKey: true,
-      bubbles: true,
-    });
+    const event = new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true });
     document.dispatchEvent(event);
   };
 
   return (
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={handleClick}
-      aria-label="Open command menu"
-      className="gap-1.5 text-muted-foreground hover:text-foreground h-8"
-    >
+    <Button variant="outline" size="sm" onClick={handleClick} aria-label="Open command menu" className="gap-1.5 text-muted-foreground hover:text-foreground h-8">
       <Command className="size-3.5" />
       <span className="hidden sm:inline text-xs">Quick Actions</span>
       <kbd className="pointer-events-none hidden h-5 select-none items-center gap-0.5 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 sm:flex">
@@ -438,13 +339,10 @@ function CommandPaletteButton() {
 }
 
 function BudgetDashboard() {
-  const { getTargetPercentage } = useBudget();
+  const { state } = useBudget();
   const { designLanguage } = useDesignLanguage();
   const isDelight = designLanguage === "delight";
-  const targetNeeds = getTargetPercentage("needs");
-  const targetWants = getTargetPercentage("wants");
-  const targetSavings = getTargetPercentage("savings");
-  const targetString = `${targetNeeds} / ${targetWants} / ${targetSavings}`;
+  const categories = getSortedCategories(state);
 
   return (
     <div
@@ -456,7 +354,6 @@ function BudgetDashboard() {
       )}
     >
       <div className="container mx-auto px-4 py-8 max-w-7xl">
-        {/* Top Bar - Command Palette & Theme Toggle */}
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -467,7 +364,6 @@ function BudgetDashboard() {
           <ThemeToggle />
         </motion.div>
 
-        {/* Header */}
         <motion.header
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -477,9 +373,9 @@ function BudgetDashboard() {
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-          className="flex flex-col items-center justify-center gap-1 mb-2"
-        >
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="flex flex-col items-center justify-center gap-1 mb-2"
+          >
             <h1
               className={cn(
                 "text-4xl",
@@ -496,19 +392,11 @@ function BudgetDashboard() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.2 }}
-            className={cn(
-              "text-lg",
-              isDelight
-                ? "text-foreground/75 delight-serif-display"
-                : "text-muted-foreground"
-            )}
+            className={cn("text-lg", isDelight ? "text-foreground/75 delight-serif-display" : "text-muted-foreground")}
           >
             Manage your money
-            <br className="sm:hidden" /> with the{" "}
-            <span className="font-semibold text-foreground">
-              {targetString}
-            </span>{" "}
-            rule
+            <br className="sm:hidden" /> with budgets that fit{" "}
+            <span className="font-semibold text-foreground">your life</span>
           </motion.p>
           <CurrentBudgetName />
           <motion.p
@@ -519,16 +407,16 @@ function BudgetDashboard() {
           >
             By Ali Shariatmadari
           </motion.p>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.4 }}
-            className="flex items-center justify-center gap-6 mt-4 text-sm"
-          >
-            {(["needs", "wants", "savings"] as CategoryName[]).map(
-              (category, index) => (
+          {categories.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.5, delay: 0.4 }}
+              className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 mt-4 text-sm"
+            >
+              {categories.map((category, index) => (
                 <motion.div
-                  key={category}
+                  key={category.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3, delay: 0.5 + index * 0.1 }}
@@ -537,31 +425,17 @@ function BudgetDashboard() {
                   <motion.div
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
-                    transition={{
-                      duration: 0.3,
-                      delay: 0.6 + index * 0.1,
-                      type: "spring",
-                    }}
+                    transition={{ duration: 0.3, delay: 0.6 + index * 0.1, type: "spring" }}
                     className="w-3 h-3 rounded-full"
-                    style={{
-                      backgroundColor: getCategoryColor(category, designLanguage),
-                    }}
+                    style={{ backgroundColor: resolveCategoryColor(category.colorToken, category.sortOrder, designLanguage) }}
                   />
                   <span>
-                    <strong>
-                      {category === "needs"
-                        ? targetNeeds
-                        : category === "wants"
-                        ? targetWants
-                        : targetSavings}
-                      %
-                    </strong>{" "}
-                    {CATEGORY_CONFIG[category].label}
+                    <strong>{category.targetPercentage}%</strong> {category.name}
                   </span>
                 </motion.div>
-              )
-            )}
-          </motion.div>
+              ))}
+            </motion.div>
+          )}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -574,70 +448,32 @@ function BudgetDashboard() {
           </motion.div>
         </motion.header>
 
-        {/* Main Content */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.3 }}
-          className="space-y-6"
-        >
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5, delay: 0.3 }} className="space-y-6">
           <GettingStarted />
 
-          {/* First Row: Pie Chart and Comparison Side by Side */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-            >
+            <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.4 }}>
               <ChartSection />
             </motion.div>
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.5, delay: 0.5 }}
-            >
+            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.5 }}>
               <BudgetComparison />
             </motion.div>
           </div>
 
-          {/* Second Row: Income, Needs, Wants, Savings */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.6 }}
-          >
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.6 }}>
             <BudgetColumns />
           </motion.div>
         </motion.div>
 
-        {/* Projection Card - Below categories, above target settings */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.65 }}
-          className="mt-8"
-        >
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.65 }} className="mt-8">
           <BudgetProjectionCard />
         </motion.div>
 
-        {/* Target Settings - Power User Section */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.7 }}
-          className="mt-8"
-        >
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.7 }} className="mt-8">
           <TargetSettings />
         </motion.div>
 
-        {/* Budget Manager - Save/Load Multiple Budgets */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.8 }}
-          className="mt-4"
-        >
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.8 }} className="mt-4">
           <BudgetManager />
         </motion.div>
       </div>
@@ -651,7 +487,7 @@ export default function Home() {
   const hasShareCode = isHydrated
     ? new URLSearchParams(window.location.search).has("budget")
     : false;
-  const hasExistingData = isHydrated ? hasStoredBudgetItems() : false;
+  const hasExistingData = isHydrated ? readStoredPlanHasData() : false;
   const skippedOnboarding = isHydrated ? hasSkippedOnboarding() : false;
   const shouldRedirectToOnboarding =
     isHydrated && !hasShareCode && !hasExistingData && !skippedOnboarding;

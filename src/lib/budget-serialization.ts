@@ -1,106 +1,79 @@
 import pako from "pako";
 import {
-  BudgetState,
+  BudgetPlan,
   SerializedBudget,
-  CATEGORY_CONFIG,
-  CategoryName,
+  SerializedBudgetV3,
 } from "@/types/budget";
+import {
+  serializePlan,
+  serializedV2ToV3,
+  getSerializedPreview,
+  type BudgetPreview,
+} from "@/lib/budget-plan";
 
 /**
- * Serialize budget state to a compact format for sharing
- * Strips IDs since they will be regenerated on import
+ * Serialize a plan to the compact v3 share format.
+ * IDs are stripped since they are regenerated on import.
  */
-export function serializeBudget(state: BudgetState): SerializedBudget {
-  const categories: CategoryName[] = ["needs", "wants", "savings", "income"];
-
-  const items = categories.reduce(
-    (acc, category) => {
-      acc[category] = state.categories[category].items.map((item) => ({
-        label: item.label,
-        amount: item.amount,
-      }));
-      return acc;
-    },
-    {} as SerializedBudget["items"]
-  );
-
-  // Only include targets if they differ from defaults
-  const defaultTargets = {
-    needs: CATEGORY_CONFIG.needs.targetPercentage,
-    wants: CATEGORY_CONFIG.wants.targetPercentage,
-    savings: CATEGORY_CONFIG.savings.targetPercentage,
-  };
-
-  const hasCustomTargets =
-    state.targetPercentages.needs !== defaultTargets.needs ||
-    state.targetPercentages.wants !== defaultTargets.wants ||
-    state.targetPercentages.savings !== defaultTargets.savings;
-
-  const serialized: SerializedBudget = { items };
-
-  if (hasCustomTargets) {
-    serialized.targets = {
-      needs: state.targetPercentages.needs,
-      wants: state.targetPercentages.wants,
-      savings: state.targetPercentages.savings,
-    };
-  }
-
-  return serialized;
+export function serializeBudget(plan: BudgetPlan): SerializedBudgetV3 {
+  return serializePlan(plan);
 }
 
 /**
- * Encode a budget state to a URL-safe string
- * Uses gzip compression + base64url encoding
+ * Encode a plan to a URL-safe string (gzip + base64url).
  */
-export function encodeBudget(state: BudgetState): string {
-  const serialized = serializeBudget(state);
+export function encodeBudget(plan: BudgetPlan): string {
+  const serialized = serializeBudget(plan);
   const json = JSON.stringify(serialized);
 
-  // Compress with pako
   const compressed = pako.deflate(json);
 
-  // Convert to base64url (URL-safe base64)
   const base64 = btoa(String.fromCharCode(...compressed))
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
-    .replace(/=+$/, ""); // Remove padding
+    .replace(/=+$/, "");
 
   return base64;
 }
 
-/**
- * Decode a shared budget code back to serialized format
- */
-export function decodeBudget(code: string): SerializedBudget | null {
-  try {
-    // Convert from base64url back to base64
-    let base64 = code.replace(/-/g, "+").replace(/_/g, "/");
+function looksLikeV2(value: unknown): value is SerializedBudget {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "items" in value &&
+    typeof (value as { items: unknown }).items === "object"
+  );
+}
 
-    // Add padding if needed
+/**
+ * Decode a shared budget code into the v3 serialized format.
+ * Accepts both legacy v2 payloads and v3 payloads.
+ */
+export function decodeBudget(code: string): SerializedBudgetV3 | null {
+  try {
+    let base64 = code.replace(/-/g, "+").replace(/_/g, "/");
     while (base64.length % 4 !== 0) {
       base64 += "=";
     }
 
-    // Decode base64 to binary
     const binary = atob(base64);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) {
       bytes[i] = binary.charCodeAt(i);
     }
 
-    // Decompress
     const decompressed = pako.inflate(bytes, { to: "string" });
-
-    // Parse JSON
     const parsed = JSON.parse(decompressed);
 
-    // Validate structure
-    if (!parsed.items || typeof parsed.items !== "object") {
-      return null;
+    if (parsed && parsed.version === 3 && Array.isArray(parsed.categories)) {
+      return parsed as SerializedBudgetV3;
     }
 
-    return parsed as SerializedBudget;
+    if (looksLikeV2(parsed)) {
+      return serializedV2ToV3(parsed as SerializedBudget);
+    }
+
+    return null;
   } catch (error) {
     console.error("Failed to decode budget:", error);
     return null;
@@ -108,10 +81,10 @@ export function decodeBudget(code: string): SerializedBudget | null {
 }
 
 /**
- * Generate a shareable URL with the budget encoded in query parameter
+ * Generate a shareable URL with the budget encoded in a query parameter.
  */
-export function generateShareUrl(state: BudgetState): string {
-  const code = encodeBudget(state);
+export function generateShareUrl(plan: BudgetPlan): string {
+  const code = encodeBudget(plan);
   const baseUrl =
     typeof window !== "undefined"
       ? `${window.location.origin}${window.location.pathname}`
@@ -120,58 +93,19 @@ export function generateShareUrl(state: BudgetState): string {
   return `${baseUrl}?budget=${code}`;
 }
 
-/**
- * Extract budget code from URL if present
- */
 export function getBudgetCodeFromUrl(): string | null {
   if (typeof window === "undefined") return null;
-
   const params = new URLSearchParams(window.location.search);
   return params.get("budget");
 }
 
-/**
- * Clear the budget parameter from URL without reloading
- */
 export function clearBudgetFromUrl(): void {
   if (typeof window === "undefined") return;
-
   const url = new URL(window.location.href);
   url.searchParams.delete("budget");
   window.history.replaceState({}, "", url.toString());
 }
 
-/**
- * Get a preview of what a serialized budget contains
- */
-export function getBudgetPreview(data: SerializedBudget): {
-  totalIncome: number;
-  totalNeeds: number;
-  totalWants: number;
-  totalSavings: number;
-  itemCounts: { needs: number; wants: number; savings: number; income: number };
-  hasCustomTargets: boolean;
-  targets: { needs: number; wants: number; savings: number };
-} {
-  const sum = (items: { amount: number }[]) =>
-    items.reduce((acc, item) => acc + item.amount, 0);
-
-  return {
-    totalIncome: sum(data.items.income),
-    totalNeeds: sum(data.items.needs),
-    totalWants: sum(data.items.wants),
-    totalSavings: sum(data.items.savings),
-    itemCounts: {
-      needs: data.items.needs.length,
-      wants: data.items.wants.length,
-      savings: data.items.savings.length,
-      income: data.items.income.length,
-    },
-    hasCustomTargets: !!data.targets,
-    targets: data.targets || {
-      needs: CATEGORY_CONFIG.needs.targetPercentage,
-      wants: CATEGORY_CONFIG.wants.targetPercentage,
-      savings: CATEGORY_CONFIG.savings.targetPercentage,
-    },
-  };
+export function getBudgetPreview(data: SerializedBudgetV3): BudgetPreview {
+  return getSerializedPreview(data);
 }

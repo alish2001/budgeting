@@ -1,15 +1,4 @@
-import {
-  Wallet,
-  DollarSign,
-  ShoppingBag,
-  PiggyBank,
-} from "lucide-react";
-import { CategoryName } from "@/types/budget";
+import { Tag, Wallet } from "lucide-react";
 
-// Category icons map
-export const CATEGORY_ICONS: Record<CategoryName, typeof Wallet> = {
-  income: Wallet,
-  needs: DollarSign,
-  wants: ShoppingBag,
-  savings: PiggyBank,
-};
+export const INCOME_ICON = Wallet;
+export const CATEGORY_ICON = Tag;

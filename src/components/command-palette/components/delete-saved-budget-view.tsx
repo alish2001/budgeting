@@ -45,15 +45,14 @@ export function DeleteSavedBudgetView({
       return { totalIncome: 0, totalItems: 0 };
     }
 
-    const totalIncome = selectedBudget.data.items.income.reduce(
-      (sum, item) => sum + item.amount,
+    const data = selectedBudget.data;
+    const totalIncome = data.income.reduce((sum, item) => sum + item.amount, 0);
+    const categoryItems = data.categories.reduce(
+      (sum, category) => sum + category.items.length,
       0,
     );
     const totalItems =
-      selectedBudget.data.items.needs.length +
-      selectedBudget.data.items.wants.length +
-      selectedBudget.data.items.savings.length +
-      selectedBudget.data.items.income.length;
+      categoryItems + (data.unassigned?.length ?? 0) + data.income.length;
 
     return { totalIncome, totalItems };
   };

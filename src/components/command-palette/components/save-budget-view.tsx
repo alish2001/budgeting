@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { ArrowLeft, Check, Loader2, Save } from "lucide-react";
 import { useBudget } from "@/lib/budget-context";
 import { generateBudgetName } from "@/lib/budget-storage";
+import { hasPlanData } from "@/lib/budget-plan";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,18 +17,13 @@ interface SaveBudgetViewProps {
 }
 
 export function SaveBudgetView({ onCancel, onSuccess }: SaveBudgetViewProps) {
-  const { state, saveCurrentBudget, isHydrated, getTotalIncome } = useBudget();
-  const [name, setName] = useState(state.currentBudgetName || "");
+  const { state, saveCurrentBudget, isHydrated } = useBudget();
+  const [name, setName] = useState(state.name || "");
   const [isSaving, setIsSaving] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const defaultName = useMemo(() => generateBudgetName(), []);
 
-  const totalIncome = getTotalIncome();
-  const hasData =
-    totalIncome > 0 ||
-    state.categories.needs.items.length > 0 ||
-    state.categories.wants.items.length > 0 ||
-    state.categories.savings.items.length > 0;
+  const hasData = hasPlanData(state);
 
   useEffect(() => {
     nameInputRef.current?.focus();
@@ -40,7 +36,7 @@ export function SaveBudgetView({ onCancel, onSuccess }: SaveBudgetViewProps) {
 
     setIsSaving(true);
     const trimmed = name.trim();
-    const nextName = trimmed || state.currentBudgetName || defaultName;
+    const nextName = trimmed || state.name || defaultName;
     saveCurrentBudget(nextName);
     setTimeout(() => {
       setIsSaving(false);

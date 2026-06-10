@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Edit2, ArrowLeft, Check } from "lucide-react";
 import { useBudget } from "@/lib/budget-context";
+import { hasPlanData } from "@/lib/budget-plan";
 import { KeyboardShortcut } from "./keyboard-shortcut";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,15 +16,11 @@ interface RenameBudgetViewProps {
 }
 
 export function RenameBudgetView({ onCancel, onSuccess }: RenameBudgetViewProps) {
-  const { state, setCurrentBudgetName, isHydrated, getTotalIncome } = useBudget();
-  const [name, setName] = useState(state.currentBudgetName || "");
+  const { state, setCurrentBudgetName, isHydrated } = useBudget();
+  const [name, setName] = useState(state.name || "");
   const nameInputRef = useRef<HTMLInputElement>(null);
 
-  const totalIncome = getTotalIncome();
-  const hasData = totalIncome > 0 || 
-                  state.categories.needs.items.length > 0 || 
-                  state.categories.wants.items.length > 0 || 
-                  state.categories.savings.items.length > 0;
+  const hasData = hasPlanData(state);
 
   useEffect(() => {
     nameInputRef.current?.focus();

@@ -16,11 +16,23 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { CURRENT_BUDGET_STORAGE_KEY, useBudget } from "@/lib/budget-context";
+import { readStoredPlanHasData, useBudget } from "@/lib/budget-context";
+import { hasPlanData } from "@/lib/budget-plan";
 import { setSkippedOnboarding } from "@/lib/onboarding-gate";
 import { cn, formatCurrency } from "@/lib/utils";
 import { useDesignLanguage } from "@/lib/design-language-context";
-import type { CategoryName, SerializedBudget, SpendingCategoryName } from "@/types/budget";
+import {
+  CATEGORY_CONFIG,
+  type CategoryName,
+  type SerializedBudgetV3,
+  type SpendingCategoryName,
+} from "@/types/budget";
+
+const DEFAULT_TARGETS: Record<SpendingCategoryName, number> = {
+  needs: CATEGORY_CONFIG.needs.targetPercentage,
+  wants: CATEGORY_CONFIG.wants.targetPercentage,
+  savings: CATEGORY_CONFIG.savings.targetPercentage,
+};
 
 type StepId = "welcome" | CategoryName | "review";
 
@@ -764,21 +776,7 @@ export function OnboardingFlow() {
 
   const hasExistingStoredBudget = useMemo(() => {
     if (!isHydrated) return false;
-    try {
-      const stored = localStorage.getItem(CURRENT_BUDGET_STORAGE_KEY);
-      if (!stored) return false;
-      const parsed = JSON.parse(stored);
-      const budgetData = parsed?.currentBudget;
-
-      return (
-        (budgetData?.categories?.income?.items?.length ?? 0) > 0 ||
-        (budgetData?.categories?.needs?.items?.length ?? 0) > 0 ||
-        (budgetData?.categories?.wants?.items?.length ?? 0) > 0 ||
-        (budgetData?.categories?.savings?.items?.length ?? 0) > 0
-      );
-    } catch {
-      return false;
-    }
+    return readStoredPlanHasData();
   }, [isHydrated]);
 
   useEffect(() => {
@@ -807,22 +805,9 @@ export function OnboardingFlow() {
     };
   }, [draft]);
 
-  const existingHasDataFromState =
-    state.categories.income.items.length > 0 ||
-    state.categories.needs.items.length > 0 ||
-    state.categories.wants.items.length > 0 ||
-    state.categories.savings.items.length > 0;
+  const existingHasData = hasPlanData(state) || hasExistingStoredBudget;
 
-  const existingHasData = existingHasDataFromState || hasExistingStoredBudget;
-
-  const targets = useMemo(
-    () => ({
-      needs: state.targetPercentages.needs,
-      wants: state.targetPercentages.wants,
-      savings: state.targetPercentages.savings,
-    }),
-    [state.targetPercentages.needs, state.targetPercentages.wants, state.targetPercentages.savings]
-  );
+  const targets = DEFAULT_TARGETS;
 
   const currentStepIndex = ORDERED_STEPS.indexOf(step);
   const progress = ORDERED_STEPS.length <= 1 ? 0 : currentStepIndex / (ORDERED_STEPS.length - 1);
@@ -856,14 +841,15 @@ export function OnboardingFlow() {
   }, [isDirty, skipToDashboard]);
 
   const applyDraftToBudget = useCallback(() => {
-    const payload: SerializedBudget = {
-      items: {
-        income: stripIds(draft.income),
-        needs: stripIds(draft.needs),
-        wants: stripIds(draft.wants),
-        savings: stripIds(draft.savings),
-      },
-      targets,
+    const payload: SerializedBudgetV3 = {
+      version: 3,
+      name: budgetName.trim() || undefined,
+      income: stripIds(draft.income),
+      categories: [
+        { name: CATEGORY_CONFIG.needs.label, targetPercentage: targets.needs, items: stripIds(draft.needs) },
+        { name: CATEGORY_CONFIG.wants.label, targetPercentage: targets.wants, items: stripIds(draft.wants) },
+        { name: CATEGORY_CONFIG.savings.label, targetPercentage: targets.savings, items: stripIds(draft.savings) },
+      ],
     };
 
     importBudget(payload);

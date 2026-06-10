@@ -23,7 +23,7 @@ import {
   getBudgetPreview,
 } from "@/lib/budget-serialization";
 import { formatCurrency } from "@/lib/utils";
-import { getCategoryColor } from "@/lib/design-language";
+import { getIncomeColor, getCategoryColorByIndex } from "@/lib/design-language";
 import {
   Download,
   AlertCircle,
@@ -93,10 +93,7 @@ export function ImportBudgetDialog({
 
   const { preview, error } = validationResult;
   const previewData = preview ? getBudgetPreview(preview) : null;
-  const needsColor = getCategoryColor("needs", designLanguage);
-  const wantsColor = getCategoryColor("wants", designLanguage);
-  const savingsColor = getCategoryColor("savings", designLanguage);
-  const incomeColor = getCategoryColor("income", designLanguage);
+  const incomeColor = getIncomeColor(designLanguage);
 
   const handleImport = () => {
     if (!preview) return;
@@ -279,66 +276,33 @@ export function ImportBudgetDialog({
 
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div className="space-y-1">
-                      <p className="text-muted-foreground text-xs">
-                        Total Income
-                      </p>
-                      <p
-                        className="font-semibold"
-                        style={{ color: incomeColor }}
-                      >
+                      <p className="text-muted-foreground text-xs">Total Income</p>
+                      <p className="font-semibold" style={{ color: incomeColor }}>
                         {formatCurrency(previewData.totalIncome)}
                       </p>
                     </div>
 
-                    <div className="space-y-1">
-                      <p
-                        className="text-xs"
-                        style={{ color: needsColor }}
-                      >
-                        Needs ({previewData.itemCounts.needs} items)
-                      </p>
-                      <p className="font-semibold">
-                        {formatCurrency(previewData.totalNeeds)}
-                      </p>
-                    </div>
-
-                    <div className="space-y-1">
-                      <p
-                        className="text-xs"
-                        style={{ color: wantsColor }}
-                      >
-                        Wants ({previewData.itemCounts.wants} items)
-                      </p>
-                      <p className="font-semibold">
-                        {formatCurrency(previewData.totalWants)}
-                      </p>
-                    </div>
-
-                    <div className="space-y-1">
-                      <p
-                        className="text-xs"
-                        style={{ color: savingsColor }}
-                      >
-                        Savings ({previewData.itemCounts.savings} items)
-                      </p>
-                      <p className="font-semibold">
-                        {formatCurrency(previewData.totalSavings)}
-                      </p>
-                    </div>
+                    {previewData.categories.map((category, index) => (
+                      <div key={`${category.name}-${index}`} className="space-y-1">
+                        <p
+                          className="text-xs"
+                          style={{ color: getCategoryColorByIndex(index, designLanguage) }}
+                        >
+                          {category.name} ({category.itemCount} items)
+                        </p>
+                        <p className="font-semibold">{formatCurrency(category.total)}</p>
+                      </div>
+                    ))}
                   </div>
 
-                  {previewData.hasCustomTargets && (
-                    <div className="pt-2 border-t border-border">
-                      <p className="text-xs text-muted-foreground">
-                        Targets:{" "}
-                        <span className="font-medium">
-                          {previewData.targets.needs}/
-                          {previewData.targets.wants}/
-                          {previewData.targets.savings}
-                        </span>
-                      </p>
-                    </div>
-                  )}
+                  <div className="pt-2 border-t border-border">
+                    <p className="text-xs text-muted-foreground">
+                      <span className="font-medium">
+                        {previewData.categoryCount} categories
+                      </span>{" "}
+                      • {formatCurrency(previewData.totalBudgeted)} budgeted
+                    </p>
+                  </div>
                 </div>
               </motion.div>
             )}

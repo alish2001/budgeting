@@ -20,7 +20,7 @@ import {
 } from "@/lib/budget-serialization";
 import { KeyboardShortcut } from "./keyboard-shortcut";
 import { useDesignLanguage } from "@/lib/design-language-context";
-import { getCategoryColor } from "@/lib/design-language";
+import { getIncomeColor } from "@/lib/design-language";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -59,7 +59,7 @@ export function ImportBudgetView({ onCancel, onSuccess }: ImportBudgetViewProps)
 
   const { preview, error: validationError } = validationResult;
   const previewData = preview ? getBudgetPreview(preview) : null;
-  const incomeColor = getCategoryColor("income", designLanguage);
+  const incomeColor = getIncomeColor(designLanguage);
 
   const handleImport = () => {
     if (!preview) return;
@@ -188,12 +188,11 @@ export function ImportBudgetView({ onCancel, onSuccess }: ImportBudgetViewProps)
               </div>
               <div>
                 <p className="text-muted-foreground">Items</p>
-                <p className="font-semibold">
-                  {previewData.itemCounts.needs +
-                    previewData.itemCounts.wants +
-                    previewData.itemCounts.savings +
-                    previewData.itemCounts.income}
-                </p>
+                <p className="font-semibold">{previewData.itemCount}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Categories</p>
+                <p className="font-semibold">{previewData.categoryCount}</p>
               </div>
             </div>
           </motion.div>

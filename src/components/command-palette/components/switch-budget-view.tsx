@@ -21,15 +21,14 @@ export function SwitchBudgetView({ onCancel, onSuccess }: SwitchBudgetViewProps)
   const [search, setSearch] = useState("");
 
   const getBudgetSummary = (budget: SavedBudget) => {
-    const totalIncome = budget.data.items.income.reduce(
-      (sum, item) => sum + item.amount,
+    const data = budget.data;
+    const totalIncome = data.income.reduce((sum, item) => sum + item.amount, 0);
+    const categoryItems = data.categories.reduce(
+      (sum, category) => sum + category.items.length,
       0,
     );
     const totalItems =
-      budget.data.items.needs.length +
-      budget.data.items.wants.length +
-      budget.data.items.savings.length +
-      budget.data.items.income.length;
+      categoryItems + (data.unassigned?.length ?? 0) + data.income.length;
     return { totalIncome, totalItems };
   };
 

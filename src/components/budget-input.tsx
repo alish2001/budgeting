@@ -5,44 +5,53 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CategoryName, BudgetItem } from "@/types/budget";
 import { useBudget } from "@/lib/budget-context";
 
+export type BudgetInputTarget =
+  | { type: "income" }
+  | { type: "category"; categoryId: string | null };
+
+interface EditableItem {
+  id: string;
+  label: string;
+  amount: number;
+}
+
 interface BudgetInputProps {
-  category: CategoryName;
+  target: BudgetInputTarget;
   onClose: () => void;
-  item?: BudgetItem; // If provided, we're editing
+  item?: EditableItem; // If provided, we're editing
+  placeholder?: string;
 }
 
 export const BudgetInput = memo(function BudgetInput({
-  category,
+  target,
   onClose,
   item,
+  placeholder,
 }: BudgetInputProps) {
   const [label, setLabel] = useState(item?.label || "");
   const [amount, setAmount] = useState(item?.amount.toString() || "");
   const [labelError, setLabelError] = useState(false);
   const [amountError, setAmountError] = useState(false);
   const [buttonShake, setButtonShake] = useState(false);
-  const { addItem, updateItem } = useBudget();
+  const {
+    addIncomeItem,
+    updateIncomeItem,
+    addBudgetItem,
+    updateBudgetItem,
+  } = useBudget();
   const isEditing = !!item;
+  const fieldKey = target.type === "income" ? "income" : target.categoryId ?? "unassigned";
   const labelPlaceholder =
-    category === "income"
-      ? "e.g., Salary…"
-      : category === "needs"
-      ? "e.g., Rent…"
-      : category === "wants"
-      ? "e.g., Eating out…"
-      : "e.g., Emergency fund…";
+    placeholder ?? (target.type === "income" ? "e.g., Salary…" : "e.g., Rent…");
 
-  const syncItemToState = useEffectEvent(
-    (currentItem: BudgetItem | undefined) => {
-      if (currentItem) {
-        setLabel(currentItem.label);
-        setAmount(currentItem.amount.toString());
-      }
+  const syncItemToState = useEffectEvent((currentItem: EditableItem | undefined) => {
+    if (currentItem) {
+      setLabel(currentItem.label);
+      setAmount(currentItem.amount.toString());
     }
-  );
+  });
 
   useEffect(() => {
     syncItemToState(item);
@@ -63,34 +72,40 @@ export const BudgetInput = memo(function BudgetInput({
 
       if (isLabelValid && isAmountValid) {
         const parsedAmount = parseFloat(amount);
-        if (isEditing && item) {
-          updateItem(category, {
-            ...item,
-            label: label.trim(),
-            amount: parsedAmount,
-          });
+        const trimmedLabel = label.trim();
+
+        if (target.type === "income") {
+          if (isEditing && item) {
+            updateIncomeItem(item.id, trimmedLabel, parsedAmount);
+          } else {
+            addIncomeItem(trimmedLabel, parsedAmount);
+          }
         } else {
-          addItem(category, label.trim(), parsedAmount);
+          if (isEditing && item) {
+            updateBudgetItem(item.id, trimmedLabel, parsedAmount);
+          } else {
+            addBudgetItem(target.categoryId, trimmedLabel, parsedAmount);
+          }
         }
+
         setLabel("");
         setAmount("");
         setLabelError(false);
         setAmountError(false);
         onClose();
       } else {
-        // Set errors for invalid fields
         setLabelError(!isLabelValid);
         setAmountError(!isAmountValid);
-
-        // Trigger button shake animation
         setButtonShake(true);
       }
     },
     [
-      addItem,
-      updateItem,
+      addIncomeItem,
+      updateIncomeItem,
+      addBudgetItem,
+      updateBudgetItem,
       amount,
-      category,
+      target,
       label,
       onClose,
       isEditing,
@@ -102,9 +117,7 @@ export const BudgetInput = memo(function BudgetInput({
   const handleLabelChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       setLabel(e.target.value);
-      if (labelError) {
-        setLabelError(false);
-      }
+      if (labelError) setLabelError(false);
     },
     [labelError]
   );
@@ -112,9 +125,7 @@ export const BudgetInput = memo(function BudgetInput({
   const handleAmountChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       setAmount(e.target.value);
-      if (amountError) {
-        setAmountError(false);
-      }
+      if (amountError) setAmountError(false);
     },
     [amountError]
   );
@@ -142,13 +153,13 @@ export const BudgetInput = memo(function BudgetInput({
         className="space-y-1.5"
       >
         <Label
-          htmlFor={`label-${category}-${item?.id || "new"}`}
+          htmlFor={`label-${fieldKey}-${item?.id || "new"}`}
           className="text-xs font-medium"
         >
           Label
         </Label>
         <Input
-          id={`label-${category}-${item?.id || "new"}`}
+          id={`label-${fieldKey}-${item?.id || "new"}`}
           type="text"
           placeholder={labelPlaceholder}
           value={label}
@@ -165,13 +176,13 @@ export const BudgetInput = memo(function BudgetInput({
         className="space-y-1.5"
       >
         <Label
-          htmlFor={`amount-${category}-${item?.id || "new"}`}
+          htmlFor={`amount-${fieldKey}-${item?.id || "new"}`}
           className="text-xs font-medium"
         >
           Amount ($)
         </Label>
         <Input
-          id={`amount-${category}-${item?.id || "new"}`}
+          id={`amount-${fieldKey}-${item?.id || "new"}`}
           type="number"
           placeholder="0.00"
           value={amount}
@@ -189,13 +200,7 @@ export const BudgetInput = memo(function BudgetInput({
         className="flex gap-2"
       >
         <motion.div
-          animate={
-            buttonShake
-              ? {
-                  x: [0, -10, 10, -10, 10, 0],
-                }
-              : { x: 0 }
-          }
+          animate={buttonShake ? { x: [0, -10, 10, -10, 10, 0] } : { x: 0 }}
           transition={{ duration: 0.5, ease: "easeInOut" }}
           className="flex-1"
         >
