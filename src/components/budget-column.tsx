@@ -8,7 +8,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useDroppable } from "@dnd-kit/core";
+import { useDraggable, useDroppable } from "@dnd-kit/core";
 import {
   GripVertical,
   MoreVertical,
@@ -385,43 +385,60 @@ export const CategoryCard = memo(function CategoryCard({
         </CardHeader>
 
         <CardContent className="flex-1 flex flex-col">
-          <SortableContext
-            items={items.map((item) => item.id)}
-            strategy={verticalListSortingStrategy}
+          {/* Items and subcategory cards share one list: a subcategory is a
+              "card within the card", a peer of the items around it. */}
+          <div
+            className={`flex-1 space-y-2 mb-4 overflow-y-auto min-h-12 ${
+              childCategories.length > 0 ? "max-h-[28rem]" : "max-h-64"
+            }`}
           >
-            <div className="flex-1 space-y-2 mb-4 overflow-y-auto max-h-64 min-h-12">
-              {items.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  {isOver ? "Drop here" : "No items yet"}
-                </p>
-              ) : (
-                items.map((item) =>
-                  editingItemId === item.id ? (
-                    <BudgetInput
-                      key={`edit-${item.id}`}
-                      target={{ type: "category", categoryId: category.id }}
-                      item={item}
-                      onClose={() => setEditingItemId(null)}
-                    />
-                  ) : (
-                    <SortableItemRow
-                      key={item.id}
-                      item={item}
-                      color={color}
-                      onEdit={() => setEditingItemId(item.id)}
-                      onRemove={() => removeBudgetItem(item.id)}
-                      moveMenu={
-                        <MoveItemMenu
-                          item={item}
-                          onMove={(targetId) => moveBudgetItem(item.id, targetId)}
-                        />
-                      }
-                    />
-                  )
+            <SortableContext
+              items={items.map((item) => item.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {items.map((item) =>
+                editingItemId === item.id ? (
+                  <BudgetInput
+                    key={`edit-${item.id}`}
+                    target={{ type: "category", categoryId: category.id }}
+                    item={item}
+                    onClose={() => setEditingItemId(null)}
+                  />
+                ) : (
+                  <SortableItemRow
+                    key={item.id}
+                    item={item}
+                    color={color}
+                    onEdit={() => setEditingItemId(item.id)}
+                    onRemove={() => removeBudgetItem(item.id)}
+                    moveMenu={
+                      <MoveItemMenu
+                        item={item}
+                        onMove={(targetId) => moveBudgetItem(item.id, targetId)}
+                      />
+                    }
+                  />
                 )
               )}
-            </div>
-          </SortableContext>
+            </SortableContext>
+
+            {childCategories.map((child) => (
+              <SubcategoryCard key={child.id} category={child} depth={1} />
+            ))}
+
+            {isAddingSubcategory && (
+              <AddSubcategoryInput
+                onAdd={(name) => addCategory(name, { parentCategoryId: category.id })}
+                onClose={() => setIsAddingSubcategory(false)}
+              />
+            )}
+
+            {items.length === 0 && childCategories.length === 0 && !isAddingSubcategory && (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                {isOver ? "Drop here" : "No items yet"}
+              </p>
+            )}
+          </div>
 
           <AnimatePresence mode="wait">
             {isAdding ? (
@@ -443,23 +460,6 @@ export const CategoryCard = memo(function CategoryCard({
               </motion.div>
             )}
           </AnimatePresence>
-
-          {(childCategories.length > 0 || isAddingSubcategory) && (
-            <div className="mt-4 space-y-2">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Subcategories
-              </p>
-              {childCategories.map((child) => (
-                <SubcategorySection key={child.id} category={child} depth={1} />
-              ))}
-              {isAddingSubcategory && (
-                <AddSubcategoryInput
-                  onAdd={(name) => addCategory(name, { parentCategoryId: category.id })}
-                  onClose={() => setIsAddingSubcategory(false)}
-                />
-              )}
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -479,10 +479,14 @@ export const CategoryCard = memo(function CategoryCard({
 });
 
 // ---------------------------------------------------------------------------
-// Subcategory section (recursive, rendered inside the parent's card)
+// Subcategory card (recursive "card within a card")
+//
+// A subcategory renders as a peer of the items around it: a draggable
+// mini-card. Dragging it onto another category (or subcategory) re-parents
+// it, carrying its whole subtree of items and children along.
 // ---------------------------------------------------------------------------
 
-function SubcategorySection({
+function SubcategoryCard({
   category,
   depth,
 }: {
@@ -525,10 +529,23 @@ function SubcategorySection({
   const siblingIndex = siblings.findIndex((sibling) => sibling.id === category.id);
   const showTargetOverflow = hasChildTargetOverflow(state, category.id);
 
-  const { setNodeRef, isOver } = useDroppable({
+  const { setNodeRef: setDroppableRef, isOver } = useDroppable({
     id: `zone:${category.id}`,
     data: { type: "zone", categoryId: category.id },
   });
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setDraggableRef,
+    isDragging,
+  } = useDraggable({
+    id: `cat:${category.id}`,
+    data: { type: "category", categoryId: category.id },
+  });
+  const setRefs = (node: HTMLElement | null) => {
+    setDroppableRef(node);
+    setDraggableRef(node);
+  };
 
   useEffect(() => {
     if (isRenaming) {
@@ -561,11 +578,25 @@ function SubcategorySection({
   return (
     <>
       <div
-        ref={setNodeRef}
-        className="rounded-md transition-shadow"
-        style={{ boxShadow: isOver ? `0 0 0 2px ${color}` : undefined }}
+        ref={setRefs}
+        className="rounded-lg border border-border/70 bg-card/60 transition-shadow"
+        style={{
+          borderLeftColor: color,
+          borderLeftWidth: "3px",
+          boxShadow: isOver ? `0 0 0 2px ${color}` : undefined,
+          opacity: isDragging ? 0.4 : 1,
+        }}
       >
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 p-2">
+          <button
+            type="button"
+            className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground touch-none shrink-0"
+            aria-label={`Drag ${category.name} subcategory`}
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical className="size-3.5" />
+          </button>
           <button
             type="button"
             onClick={() => setIsExpanded((prev) => !prev)}
@@ -574,7 +605,6 @@ function SubcategorySection({
           >
             {isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
           </button>
-          <span className="size-2 rounded-full shrink-0" style={{ backgroundColor: color }} aria-hidden />
 
           {isRenaming ? (
             <div className="flex items-center gap-1 flex-1 min-w-0">
@@ -606,7 +636,9 @@ function SubcategorySection({
               className="group flex items-center gap-1 min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
               aria-label={`Rename ${category.name}`}
             >
-              <span className="text-sm font-semibold truncate">{category.name}</span>
+              <span className="text-sm font-semibold truncate" style={{ color }}>
+                {category.name}
+              </span>
               <Pencil className="size-2.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
             </button>
           )}
@@ -662,7 +694,7 @@ function SubcategorySection({
         </div>
 
         {isEditingTarget && (
-          <div className="flex items-center gap-1 mt-1 ml-5">
+          <div className="flex items-center gap-1 px-2 pb-2">
             <Input
               type="number"
               min={0}
@@ -688,46 +720,53 @@ function SubcategorySection({
         )}
 
         {isExpanded && (
-          <div
-            className="mt-1.5 ml-1.5 pl-3 border-l-2 space-y-1.5"
-            style={{ borderColor: `${color}50` }}
-          >
+          <div className="px-2 pb-2 space-y-2">
             <SortableContext
               items={items.map((item) => item.id)}
               strategy={verticalListSortingStrategy}
             >
-              <div className="space-y-1.5">
-                {items.length === 0 && childCategories.length === 0 && !isAdding && (
-                  <p className="text-xs text-muted-foreground py-1">
-                    {isOver ? "Drop here" : "No items yet"}
-                  </p>
-                )}
-                {items.map((item) =>
-                  editingItemId === item.id ? (
-                    <BudgetInput
-                      key={`edit-${item.id}`}
-                      target={{ type: "category", categoryId: category.id }}
-                      item={item}
-                      onClose={() => setEditingItemId(null)}
-                    />
-                  ) : (
-                    <SortableItemRow
-                      key={item.id}
-                      item={item}
-                      color={color}
-                      onEdit={() => setEditingItemId(item.id)}
-                      onRemove={() => removeBudgetItem(item.id)}
-                      moveMenu={
-                        <MoveItemMenu
-                          item={item}
-                          onMove={(targetId) => moveBudgetItem(item.id, targetId)}
-                        />
-                      }
-                    />
-                  )
-                )}
-              </div>
+              {items.map((item) =>
+                editingItemId === item.id ? (
+                  <BudgetInput
+                    key={`edit-${item.id}`}
+                    target={{ type: "category", categoryId: category.id }}
+                    item={item}
+                    onClose={() => setEditingItemId(null)}
+                  />
+                ) : (
+                  <SortableItemRow
+                    key={item.id}
+                    item={item}
+                    color={color}
+                    onEdit={() => setEditingItemId(item.id)}
+                    onRemove={() => removeBudgetItem(item.id)}
+                    moveMenu={
+                      <MoveItemMenu
+                        item={item}
+                        onMove={(targetId) => moveBudgetItem(item.id, targetId)}
+                      />
+                    }
+                  />
+                )
+              )}
             </SortableContext>
+
+            {childCategories.map((child) => (
+              <SubcategoryCard key={child.id} category={child} depth={depth + 1} />
+            ))}
+
+            {isAddingSubcategory && (
+              <AddSubcategoryInput
+                onAdd={(name) => addCategory(name, { parentCategoryId: category.id })}
+                onClose={() => setIsAddingSubcategory(false)}
+              />
+            )}
+
+            {items.length === 0 && childCategories.length === 0 && !isAdding && !isAddingSubcategory && (
+              <p className="text-xs text-muted-foreground py-1">
+                {isOver ? "Drop here" : "No items yet"}
+              </p>
+            )}
 
             {isAdding ? (
               <BudgetInput
@@ -736,23 +775,14 @@ function SubcategorySection({
               />
             ) : (
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                className="w-full h-7 text-xs"
                 onClick={() => setIsAdding(true)}
+                style={{ borderColor: `${color}80`, color }}
               >
-                <Plus className="size-3" /> Add item
+                + Add Item
               </Button>
-            )}
-
-            {childCategories.map((child) => (
-              <SubcategorySection key={child.id} category={child} depth={depth + 1} />
-            ))}
-            {isAddingSubcategory && (
-              <AddSubcategoryInput
-                onAdd={(name) => addCategory(name, { parentCategoryId: category.id })}
-                onClose={() => setIsAddingSubcategory(false)}
-              />
             )}
           </div>
         )}

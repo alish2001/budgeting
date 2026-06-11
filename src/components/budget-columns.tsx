@@ -19,7 +19,13 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { useBudget } from "@/lib/budget-context";
-import { getTopLevelCategories, getUnassignedItems } from "@/lib/budget-plan";
+import {
+  getCategoryById,
+  getTopLevelCategories,
+  getUnassignedItems,
+} from "@/lib/budget-plan";
+import { useDesignLanguage } from "@/lib/design-language-context";
+import { resolveCategoryColor } from "@/lib/design-language";
 import {
   CategoryCard,
   IncomeCard,
@@ -29,8 +35,9 @@ import {
 import { formatCurrency } from "@/lib/utils";
 
 export function BudgetColumns() {
-  const { state, moveBudgetItem } = useBudget();
-  const [activeItemId, setActiveItemId] = useState<string | null>(null);
+  const { state, moveBudgetItem, moveCategory, getSubtreeTotalForCategory } = useBudget();
+  const { designLanguage } = useDesignLanguage();
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
 
   const categories = useMemo(() => getTopLevelCategories(state), [state]);
   const unassigned = useMemo(() => getUnassignedItems(state), [state]);
@@ -40,22 +47,46 @@ export function BudgetColumns() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const activeItem = activeItemId
-    ? state.budgetItems.find((item) => item.id === activeItemId) ?? null
+  const activeItem = activeDragId
+    ? state.budgetItems.find((item) => item.id === activeDragId) ?? null
+    : null;
+  // Subcategory cards drag with a "cat:" prefix so they can't collide with item ids.
+  const activeCategory = activeDragId?.startsWith("cat:")
+    ? getCategoryById(state, activeDragId.slice("cat:".length))
     : null;
 
   const handleDragStart = (event: DragStartEvent) => {
-    setActiveItemId(String(event.active.id));
+    setActiveDragId(String(event.active.id));
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
-    setActiveItemId(null);
+    setActiveDragId(null);
     const { active, over } = event;
     if (!over) return;
 
     const activeId = String(active.id);
     const overId = String(over.id);
     if (activeId === overId) return;
+
+    // Dragging a subcategory card: re-parent it (its whole subtree of items
+    // and children moves along). moveCategory no-ops on cycles.
+    if (activeId.startsWith("cat:")) {
+      const categoryId = activeId.slice("cat:".length);
+      let newParentId: string | null | undefined;
+      if (overId.startsWith("zone:")) {
+        const key = overId.slice("zone:".length);
+        // Dropping on the Unassigned lane promotes it to a top-level card.
+        newParentId = key === "unassigned" ? null : key;
+      } else {
+        // Dropped onto an item row: join that item's category.
+        const overItem = state.budgetItems.find((item) => item.id === overId);
+        newParentId = overItem ? overItem.categoryId : undefined;
+      }
+      if (newParentId !== undefined) {
+        moveCategory(categoryId, newParentId);
+      }
+      return;
+    }
 
     // Dropping onto a zone (empty area of a category / unassigned).
     if (overId.startsWith("zone:")) {
@@ -83,7 +114,7 @@ export function BudgetColumns() {
       collisionDetection={closestCorners}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
-      onDragCancel={() => setActiveItemId(null)}
+      onDragCancel={() => setActiveDragId(null)}
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         <motion.div
@@ -140,6 +171,23 @@ export function BudgetColumns() {
             <span className="text-sm font-medium truncate">{activeItem.label}</span>
             <span className="text-sm text-muted-foreground">
               {formatCurrency(activeItem.amount)}
+            </span>
+          </div>
+        ) : activeCategory ? (
+          <div
+            className="flex items-center justify-between gap-2 p-2 bg-popover border border-border rounded-lg shadow-lg"
+            style={{
+              borderLeftColor: resolveCategoryColor(
+                activeCategory.colorToken,
+                activeCategory.sortOrder,
+                designLanguage,
+              ),
+              borderLeftWidth: "3px",
+            }}
+          >
+            <span className="text-sm font-semibold truncate">{activeCategory.name}</span>
+            <span className="text-sm text-muted-foreground">
+              {formatCurrency(getSubtreeTotalForCategory(activeCategory.id))}
             </span>
           </div>
         ) : null}

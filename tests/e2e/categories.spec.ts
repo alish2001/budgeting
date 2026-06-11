@@ -181,21 +181,63 @@ test.describe("category management", () => {
 });
 
 test.describe("subcategories", () => {
-  test("add subcategory via card menu renders an indented section, not a new card", async ({ page }) => {
+  test("add subcategory via card menu renders a card-within-card, not a new grid card", async ({ page }) => {
     await addSubcategory(page, "needs", "Housing");
 
-    // The collapsible section header is unique to subcategory sections
+    // The collapsible mini-card header is unique to subcategory cards
     await expect(page.getByRole("button", { name: /collapse housing/i })).toBeVisible({ timeout: 3000 });
-    await expect(page.getByText("Subcategories", { exact: true })).toBeVisible();
+    // And it is draggable like an item
+    await expect(page.getByRole("button", { name: /drag housing subcategory/i })).toBeVisible();
+  });
+
+  test("dragging a subcategory card into another category re-parents its subtree", async ({ page }) => {
+    await addSubcategory(page, "needs", "Housing");
+    await expect(page.getByRole("button", { name: /collapse housing/i })).toBeVisible({ timeout: 3000 });
+
+    // Give Housing an item so we can verify the subtree travels with it
+    // (the first "+ Add Item" in DOM order is Housing's, inside the Needs card)
+    await page.getByRole("button", { name: /^\+ add item$/i }).first().click();
+    await page.getByLabel("Label").fill("Hydro");
+    await page.getByLabel(/amount/i).fill("500");
+    await page.getByRole("button", { name: /^add$/i }).click();
+    await page.waitForTimeout(300);
+
+    const handle = page.getByRole("button", { name: /drag housing subcategory/i });
+    const handleBox = await handle.boundingBox();
+    // The Wants card title sits inside the Wants drop zone
+    const wantsTitle = page.getByRole("button", { name: /rename wants/i });
+    const wantsBox = await wantsTitle.boundingBox();
+    expect(handleBox).not.toBeNull();
+    expect(wantsBox).not.toBeNull();
+    if (!handleBox || !wantsBox) return;
+
+    await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(
+      wantsBox.x + wantsBox.width / 2,
+      wantsBox.y + wantsBox.height / 2,
+      { steps: 10 },
+    );
+    await page.waitForTimeout(200);
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+
+    // Housing (and its Hydro item) now lives inside the Wants card
+    await expect(page.getByRole("button", { name: /collapse housing/i })).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText("Hydro").first()).toBeVisible();
+    // Wants rolls up Housing's subtree: no direct items, $500 from subcategories
+    await expect(page.getByText(/Direct: \$0\.00 · Subcategories: \$500\.00/)).toBeVisible();
+    // Needs is back to its own $2,000 with no rollup line
+    await expect(page.getByText("$2,000.00").first()).toBeVisible();
   });
 
   test("items in a subcategory roll up into the parent card total", async ({ page }) => {
     await addSubcategory(page, "needs", "Housing");
     await expect(page.getByRole("button", { name: /collapse housing/i })).toBeVisible({ timeout: 3000 });
 
-    // Add an item inside the subcategory ("Add item" button is section-scoped;
-    // the card-level button is named "+ Add Item")
-    await page.getByRole("button", { name: /^add item$/i }).click();
+    // Add an item inside the subcategory (its "+ Add Item" comes first in DOM
+    // order, before the parent card's footer button)
+    await page.getByRole("button", { name: /^\+ add item$/i }).first().click();
     await page.getByLabel("Label").fill("Hydro");
     await page.getByLabel(/amount/i).fill("500");
     await page.getByRole("button", { name: /^add$/i }).click();
