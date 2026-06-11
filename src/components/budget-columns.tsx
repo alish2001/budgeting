@@ -7,12 +7,15 @@ import {
   DragOverlay,
   PointerSensor,
   KeyboardSensor,
+  useDroppable,
   useSensor,
   useSensors,
   closestCorners,
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
+import { CornerLeftUp } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   SortableContext,
   sortableKeyboardCoordinates,
@@ -62,21 +65,30 @@ export function BudgetColumns() {
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveDragId(null);
     const { active, over } = event;
-    if (!over) return;
-
     const activeId = String(active.id);
+
+    if (!over) {
+      // Dropped out in the wild: a nested subcategory becomes its own
+      // top-level card.
+      if (activeId.startsWith("cat:")) {
+        moveCategory(activeId.slice("cat:".length), null);
+      }
+      return;
+    }
+
     const overId = String(over.id);
     if (activeId === overId) return;
 
-    // Dragging a subcategory card: re-parent it (its whole subtree of items
+    // Dragging a category card: re-parent it (its whole subtree of items
     // and children moves along). moveCategory no-ops on cycles.
     if (activeId.startsWith("cat:")) {
       const categoryId = activeId.slice("cat:".length);
       let newParentId: string | null | undefined;
       if (overId.startsWith("zone:")) {
         const key = overId.slice("zone:".length);
-        // Dropping on the Unassigned lane promotes it to a top-level card.
-        newParentId = key === "unassigned" ? null : key;
+        // The top-level zone and the Unassigned lane both promote it to a
+        // top-level card.
+        newParentId = key === "unassigned" || key === "top-level" ? null : key;
       } else {
         // Dropped onto an item row: join that item's category.
         const overItem = state.budgetItems.find((item) => item.id === overId);
@@ -156,6 +168,14 @@ export function BudgetColumns() {
           </motion.div>
         )}
 
+        {/* While dragging a nested subcategory, offer an explicit landing
+            spot for promoting it to its own top-level card. */}
+        {activeCategory?.parentCategoryId != null && (
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.15 }}>
+            <TopLevelDropZone />
+          </motion.div>
+        )}
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -193,5 +213,26 @@ export function BudgetColumns() {
         ) : null}
       </DragOverlay>
     </DndContext>
+  );
+}
+
+function TopLevelDropZone() {
+  const { setNodeRef, isOver } = useDroppable({
+    id: "zone:top-level",
+    data: { type: "zone", categoryId: null },
+  });
+
+  return (
+    <Card
+      ref={setNodeRef}
+      className={`flex flex-col h-full border-dashed items-center justify-center min-h-44 transition-colors ${
+        isOver ? "border-primary bg-primary/5" : ""
+      }`}
+    >
+      <CardContent className="flex flex-col items-center justify-center gap-2 p-6 text-center text-muted-foreground">
+        <CornerLeftUp className="size-6" />
+        <span className="text-sm">Drop here to make it a top-level category</span>
+      </CardContent>
+    </Card>
   );
 }

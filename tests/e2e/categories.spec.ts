@@ -270,6 +270,60 @@ test.describe("subcategories", () => {
     await expect(page.getByRole("button", { name: /collapse wants/i })).toBeVisible({ timeout: 3000 });
   });
 
+  test("drag a top-level category card into another to nest it", async ({ page }) => {
+    const handle = page.getByRole("button", { name: /drag wants category/i });
+    await expect(handle).toBeVisible({ timeout: 5000 });
+    // The grid sits below the fold; mouse coords must be inside the viewport
+    await handle.scrollIntoViewIfNeeded();
+    const handleBox = await handle.boundingBox();
+    const needsTitle = page.getByRole("button", { name: /rename needs/i });
+    const needsBox = await needsTitle.boundingBox();
+    expect(handleBox).not.toBeNull();
+    expect(needsBox).not.toBeNull();
+    if (!handleBox || !needsBox) return;
+
+    await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(needsBox.x + needsBox.width / 2, needsBox.y + needsBox.height / 2, { steps: 10 });
+    await page.waitForTimeout(200);
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+
+    // Wants is now a subcategory card inside Needs
+    await expect(page.getByRole("button", { name: /collapse wants/i })).toBeVisible({ timeout: 3000 });
+    await expect(page.getByRole("button", { name: /drag wants subcategory/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /drag wants category/i })).toHaveCount(0);
+  });
+
+  test("drag a subcategory out into the wild to make it a top-level card", async ({ page }) => {
+    await addSubcategory(page, "needs", "Housing");
+    const handle = page.getByRole("button", { name: /drag housing subcategory/i });
+    await expect(handle).toBeVisible({ timeout: 3000 });
+    const handleBox = await handle.boundingBox();
+    expect(handleBox).not.toBeNull();
+    if (!handleBox) return;
+
+    // Start the drag; the top-level drop zone card appears once it activates
+    await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handleBox.x + handleBox.width / 2 + 12, handleBox.y + handleBox.height / 2 + 2, { steps: 3 });
+
+    const dropZone = page.getByText(/drop here to make it a top-level category/i);
+    await expect(dropZone).toBeVisible({ timeout: 3000 });
+    const zoneBox = await dropZone.boundingBox();
+    expect(zoneBox).not.toBeNull();
+    if (!zoneBox) return;
+
+    await page.mouse.move(zoneBox.x + zoneBox.width / 2, zoneBox.y + zoneBox.height / 2, { steps: 10 });
+    await page.waitForTimeout(200);
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+
+    // Housing is now its own top-level grid card
+    await expect(page.getByRole("button", { name: /drag housing category/i })).toBeVisible({ timeout: 3000 });
+    await expect(page.getByRole("button", { name: /collapse housing/i })).toHaveCount(0);
+  });
+
   test("palette pick lists show hierarchical path labels", async ({ page }) => {
     await addSubcategory(page, "needs", "Housing");
     await expect(page.getByRole("button", { name: /collapse housing/i })).toBeVisible({ timeout: 3000 });

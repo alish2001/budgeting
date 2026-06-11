@@ -14,7 +14,7 @@
 /coverage
 /playwright-report/
 /test-results/
-/playwright.local.config.ts
+/playwright.local.config.*
 
 # next.js
 /.next/

@@ -200,10 +200,24 @@ export const CategoryCard = memo(function CategoryCard({
   const showTargetOverflow = hasChildTargetOverflow(state, category.id);
   const topLevelCategories = getTopLevelCategories(state);
 
-  const { setNodeRef, isOver } = useDroppable({
+  const { setNodeRef: setDroppableRef, isOver } = useDroppable({
     id: `zone:${category.id}`,
     data: { type: "zone", categoryId: category.id },
   });
+  // Top-level cards drag too: drop one onto another category to nest it.
+  const {
+    attributes: dragAttributes,
+    listeners: dragListeners,
+    setNodeRef: setDraggableRef,
+    isDragging,
+  } = useDraggable({
+    id: `cat:${category.id}`,
+    data: { type: "category", categoryId: category.id },
+  });
+  const setRefs = (node: HTMLElement | null) => {
+    setDroppableRef(node);
+    setDraggableRef(node);
+  };
 
   useEffect(() => {
     if (isRenaming) {
@@ -237,16 +251,26 @@ export const CategoryCard = memo(function CategoryCard({
   return (
     <>
       <Card
-        ref={setNodeRef}
+        ref={setRefs}
         className="flex flex-col h-full transition-shadow"
         style={{
           borderTopColor: color,
           borderTopWidth: "3px",
           boxShadow: isOver ? `0 0 0 2px ${color}` : undefined,
+          opacity: isDragging ? 0.4 : 1,
         }}
       >
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground touch-none shrink-0"
+              aria-label={`Drag ${category.name} category`}
+              {...dragAttributes}
+              {...dragListeners}
+            >
+              <GripVertical className="size-4" />
+            </button>
             {isRenaming ? (
               <div className="flex items-center gap-1 flex-1">
                 <Input
