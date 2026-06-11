@@ -114,7 +114,7 @@ export const SortableItemRow = memo(function SortableItemRow({
     >
       <button
         type="button"
-        className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground touch-none shrink-0"
+        className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground touch-none shrink-0 p-1.5 -m-1"
         aria-label={`Drag ${item.label}`}
         {...attributes}
         {...listeners}
@@ -264,7 +264,7 @@ export const CategoryCard = memo(function CategoryCard({
           <div className="flex items-center justify-between gap-2">
             <button
               type="button"
-              className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground touch-none shrink-0"
+              className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground touch-none shrink-0 p-3 -m-2.5"
               aria-label={`Drag ${category.name} category`}
               {...dragAttributes}
               {...dragListeners}
@@ -614,12 +614,12 @@ function SubcategoryCard({
         <div className="flex items-center gap-1 p-2">
           <button
             type="button"
-            className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground touch-none shrink-0"
+            className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground touch-none shrink-0 p-3 -m-2.5"
             aria-label={`Drag ${category.name} subcategory`}
             {...attributes}
             {...listeners}
           >
-            <GripVertical className="size-3.5" />
+            <GripVertical className="size-4" />
           </button>
           <button
             type="button"

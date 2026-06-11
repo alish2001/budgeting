@@ -7,6 +7,20 @@ test.beforeEach(async ({ page }) => {
   await goToDashboardWithData(page);
 });
 
+/** Mouse-drag from one point to another (PointerSensor needs >5px to engage). */
+async function dragBetween(
+  page: Page,
+  from: { x: number; y: number; width: number; height: number },
+  to: { x: number; y: number; width: number; height: number },
+) {
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 10 });
+  await page.waitForTimeout(200);
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+}
+
 /** Add a subcategory through a category's kebab menu. */
 async function addSubcategory(page: Page, parentName: string, name: string) {
   await page
@@ -322,6 +336,41 @@ test.describe("subcategories", () => {
     // Housing is now its own top-level grid card
     await expect(page.getByRole("button", { name: /drag housing category/i })).toBeVisible({ timeout: 3000 });
     await expect(page.getByRole("button", { name: /collapse housing/i })).toHaveCount(0);
+  });
+
+  test("drops inside a parent's own area target the parent, not its subcategory", async ({ page }) => {
+    await addSubcategory(page, "needs", "Housing");
+    await expect(page.getByRole("button", { name: /collapse housing/i })).toBeVisible({ timeout: 3000 });
+
+    const rentHandle = page.getByRole("button", { name: /drag rent/i });
+    await rentHandle.scrollIntoViewIfNeeded();
+    // Keep both points mid-viewport so dnd-kit autoscroll stays out of the way
+    await page.evaluate(() => window.scrollBy(0, 200));
+
+    // Drop Rent onto the Needs card's own footer area — inside the parent
+    // card but outside the Housing sub-card. It must stay a direct item of
+    // Needs (previously the drop snapped to the nearest subcategory).
+    const needsFooter = page.getByRole("button", { name: /^\+ add item$/i }).nth(1);
+    let from = await rentHandle.boundingBox();
+    let to = await needsFooter.boundingBox();
+    expect(from).not.toBeNull();
+    expect(to).not.toBeNull();
+    if (!from || !to) return;
+    await dragBetween(page, from, to);
+
+    // No rollup split line: Needs' subtree total still equals its direct total
+    await expect(page.getByText(/Direct: /)).toHaveCount(0);
+
+    // Dropping onto the Housing card itself moves Rent into Housing.
+    const housingHeader = page.getByRole("button", { name: /collapse housing/i });
+    from = await rentHandle.boundingBox();
+    to = await housingHeader.boundingBox();
+    expect(from).not.toBeNull();
+    expect(to).not.toBeNull();
+    if (!from || !to) return;
+    await dragBetween(page, from, to);
+
+    await expect(page.getByText(/Direct: \$0\.00 · Subcategories: \$2,000\.00/)).toBeVisible({ timeout: 3000 });
   });
 
   test("palette pick lists show hierarchical path labels", async ({ page }) => {

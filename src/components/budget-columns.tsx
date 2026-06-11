@@ -11,6 +11,9 @@ import {
   useSensor,
   useSensors,
   closestCorners,
+  pointerWithin,
+  MeasuringStrategy,
+  type CollisionDetection,
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
@@ -36,6 +39,45 @@ import {
   AddCategoryCard,
 } from "@/components/budget-column";
 import { formatCurrency } from "@/lib/utils";
+
+/**
+ * Resolve drops by what is actually under the pointer. Nested drop zones
+ * (a subcategory card inside its parent's card) all contain the pointer at
+ * once, so we pick the innermost — a drop lands on the subcategory only when
+ * the pointer is over that card, and on the parent anywhere else in it.
+ * closestCorners (the previous behavior) snapped to the nearest subcategory
+ * even when the pointer was above it, in the parent's own area.
+ */
+const collideWithInnermostZone: CollisionDetection = (args) => {
+  const pointerCollisions = pointerWithin(args);
+  // No pointer (keyboard drags) or pointer outside everything: old behavior.
+  if (pointerCollisions.length === 0) return closestCorners(args);
+
+  // A dragged category's original card still occupies space; never resolve
+  // the drop to its own zone or the real target underneath would be masked.
+  const activeId = String(args.active.id);
+  const ownZoneId = activeId.startsWith("cat:")
+    ? `zone:${activeId.slice("cat:".length)}`
+    : null;
+  const collisions = pointerCollisions.filter(
+    (collision) => String(collision.id) !== ownZoneId,
+  );
+
+  // Item rows win over their enclosing zones (drops between items keep
+  // their index-based positioning).
+  const itemCollisions = collisions.filter(
+    (collision) => !String(collision.id).startsWith("zone:"),
+  );
+  if (itemCollisions.length > 0) return itemCollisions;
+
+  return [...collisions].sort((a, b) => {
+    const rectA = args.droppableRects.get(a.id);
+    const rectB = args.droppableRects.get(b.id);
+    const areaA = rectA ? rectA.width * rectA.height : Number.POSITIVE_INFINITY;
+    const areaB = rectB ? rectB.width * rectB.height : Number.POSITIVE_INFINITY;
+    return areaA - areaB;
+  });
+};
 
 export function BudgetColumns() {
   const { state, moveBudgetItem, moveCategory, getSubtreeTotalForCategory } = useBudget();
@@ -123,7 +165,11 @@ export function BudgetColumns() {
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCorners}
+      collisionDetection={collideWithInnermostZone}
+      // Re-measure drop zones during the drag: autoscroll (easy to trigger on
+      // mobile) otherwise leaves every rect stale, so drops resolve against
+      // positions from before the scroll.
+      measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onDragCancel={() => setActiveDragId(null)}
