@@ -12,28 +12,38 @@ import {
   type ReactNode,
 } from "react";
 import {
+  AnySerializedBudget,
   BudgetCategory,
   BudgetLineItem,
   BudgetPlan,
   IncomeItem,
   SavedBudget,
-  SerializedBudgetV3,
+  SerializedBudgetV4,
+  SerializedCategoryV4,
   SpecialSelectionId,
 } from "@/types/budget";
 import {
   createCategory,
   createDefaultPlan,
   createId,
-  getSortedCategories,
+  getEffectiveTarget,
+  getSubtreeCategoryIds,
+  getSubtreeItemTotal,
   getTotalBudgeted,
   getTotalForCategory,
   getTotalIncome as selectTotalIncome,
   hasPlanData,
   nextIncomeSortOrder,
   nextItemSortOrder,
+  planFromSerialized,
   planFromSerializedV3,
+  serializedV3ToV4,
+  promoteChildrenOf,
+  reindexSiblingGroups,
+  repairCategoryTree,
   serializePlan,
   serializedV2ToV3,
+  wouldCreateCycle,
 } from "@/lib/budget-plan";
 import { generateBudgetName } from "@/lib/budget-storage";
 
@@ -98,8 +108,23 @@ type BudgetAction =
   | { type: "RENAME_CATEGORY"; categoryId: string; name: string }
   | { type: "UPDATE_CATEGORY_TARGET"; categoryId: string; targetPercentage: number }
   | { type: "SET_CATEGORY_TARGETS"; targets: Record<string, number> }
-  | { type: "DELETE_CATEGORY"; categoryId: string; behavior: "keep" | "delete" }
-  | { type: "REORDER_CATEGORIES"; orderedCategoryIds: string[] }
+  | {
+      type: "DELETE_CATEGORY";
+      categoryId: string;
+      behavior: "keep" | "delete";
+      childBehavior: "promote" | "delete-subtree";
+    }
+  | {
+      type: "MOVE_CATEGORY";
+      categoryId: string;
+      newParentId: string | null;
+      index?: number;
+    }
+  | {
+      type: "REORDER_CATEGORIES";
+      parentId: string | null;
+      orderedCategoryIds: string[];
+    }
   | { type: "ADD_BUDGET_ITEM"; item: BudgetLineItem }
   | { type: "UPDATE_BUDGET_ITEM"; id: string; label: string; amount: number }
   | { type: "REMOVE_BUDGET_ITEM"; id: string }
@@ -263,7 +288,7 @@ function normalizePlan(value: unknown): BudgetPlan | null {
     name,
     schemaVersion: 3,
     incomeItems,
-    categories,
+    categories: repairCategoryTree(categories),
     budgetItems,
     settings: { unassignedBehavior: settingsBehavior },
     selectedCategoryId: null,
@@ -272,8 +297,14 @@ function normalizePlan(value: unknown): BudgetPlan | null {
   };
 }
 
-function normalizeSerializedV3(value: unknown): SerializedBudgetV3 | null {
-  if (!isRecord(value) || value.version !== 3) return null;
+// Defensive bound on `children` recursion when reading untrusted payloads.
+const MAX_SERIALIZED_CATEGORY_DEPTH = 32;
+
+/** Accepts v3 or v4 saved-budget payloads, always returning v4. */
+function normalizeSerializedBudget(value: unknown): SerializedBudgetV4 | null {
+  if (!isRecord(value) || (value.version !== 3 && value.version !== 4)) {
+    return null;
+  }
   if (!Array.isArray(value.income) || !Array.isArray(value.categories)) {
     return null;
   }
@@ -291,27 +322,35 @@ function normalizeSerializedV3(value: unknown): SerializedBudgetV3 | null {
           .filter((item): item is { label: string; amount: number } => item !== null)
       : [];
 
+  const cleanCategories = (raw: unknown, depth: number): SerializedCategoryV4[] =>
+    Array.isArray(raw) && depth < MAX_SERIALIZED_CATEGORY_DEPTH
+      ? raw
+          .map((entry): SerializedCategoryV4 | null => {
+            if (!isRecord(entry)) return null;
+            const category: SerializedCategoryV4 = {
+              name: normalizeLabel(entry.name) || "Category",
+              targetPercentage:
+                typeof entry.targetPercentage === "number" &&
+                Number.isFinite(entry.targetPercentage)
+                  ? entry.targetPercentage
+                  : 0,
+              items: cleanItems(entry.items),
+            };
+            const children = cleanCategories(entry.children, depth + 1);
+            if (children.length > 0) category.children = children;
+            return category;
+          })
+          .filter((category): category is SerializedCategoryV4 => category !== null)
+      : [];
+
   return {
-    version: 3,
+    version: 4,
     name:
       typeof value.name === "string" && value.name.trim()
         ? value.name.trim()
         : undefined,
     income: cleanItems(value.income),
-    categories: (value.categories as unknown[])
-      .map((raw) => {
-        if (!isRecord(raw)) return null;
-        return {
-          name: normalizeLabel(raw.name) || "Category",
-          targetPercentage:
-            typeof raw.targetPercentage === "number" &&
-            Number.isFinite(raw.targetPercentage)
-              ? raw.targetPercentage
-              : 0,
-          items: cleanItems(raw.items),
-        };
-      })
-      .filter((category): category is SerializedBudgetV3["categories"][number] => category !== null),
+    categories: cleanCategories(value.categories, 0),
     unassigned: value.unassigned ? cleanItems(value.unassigned) : undefined,
   };
 }
@@ -319,7 +358,7 @@ function normalizeSerializedV3(value: unknown): SerializedBudgetV3 | null {
 function normalizeSavedBudget(value: unknown): SavedBudget | null {
   if (!isRecord(value)) return null;
 
-  const data = normalizeSerializedV3(value.data);
+  const data = normalizeSerializedBudget(value.data);
   if (!data) return null;
 
   const nowIso = new Date().toISOString();
@@ -370,7 +409,7 @@ function migrateLegacyCurrentBudget(raw: string | null): BudgetPlan | null {
         ? ((targets as Record<string, number>)[key] as number)
         : fallback;
 
-    const serialized: SerializedBudgetV3 = serializedV2ToV3({
+    const serialized = serializedV2ToV3({
       items: {
         needs: pickItems("needs"),
         wants: pickItems("wants"),
@@ -430,21 +469,23 @@ function migrateLegacySavedBudgets(raw: string | null): SavedBudget[] {
             ? (legacyTargets[key] as number)
             : fallback;
 
-        const data = serializedV2ToV3({
-          items: {
-            needs: pick("needs"),
-            wants: pick("wants"),
-            savings: pick("savings"),
-            income: pick("income"),
-          },
-          targets: legacyTargets
-            ? {
-                needs: targetFor("needs", 50),
-                wants: targetFor("wants", 30),
-                savings: targetFor("savings", 20),
-              }
-            : undefined,
-        });
+        const data = serializedV3ToV4(
+          serializedV2ToV3({
+            items: {
+              needs: pick("needs"),
+              wants: pick("wants"),
+              savings: pick("savings"),
+              income: pick("income"),
+            },
+            targets: legacyTargets
+              ? {
+                  needs: targetFor("needs", 50),
+                  wants: targetFor("wants", 30),
+                  savings: targetFor("savings", 20),
+                }
+              : undefined,
+          }),
+        );
 
         const nowIso = new Date().toISOString();
         return {
@@ -599,10 +640,6 @@ function withPlan(
   };
 }
 
-function reindex<T extends { sortOrder: number }>(items: T[]): T[] {
-  return items.map((item, index) => ({ ...item, sortOrder: index }));
-}
-
 // ---------------------------------------------------------------------------
 // Reducer
 // ---------------------------------------------------------------------------
@@ -672,20 +709,77 @@ function budgetReducer(state: BudgetStoreState, action: BudgetAction): BudgetSto
 
     case "DELETE_CATEGORY":
       return withPlan(state, (plan) => {
-        const remainingCategories = reindex(
-          getSortedCategories(plan).filter(
-            (category) => category.id !== action.categoryId,
-          ),
+        // "promote" removes only this category (children re-attach to its
+        // parent and keep their items); "delete-subtree" removes the whole
+        // subtree, applying the item behavior to every item in it.
+        const removedIds = new Set(
+          action.childBehavior === "delete-subtree"
+            ? getSubtreeCategoryIds(plan.categories, action.categoryId)
+            : [action.categoryId],
+        );
+        const categoriesAfterPromote =
+          action.childBehavior === "promote"
+            ? promoteChildrenOf(plan.categories, action.categoryId)
+            : plan.categories;
+        const remainingCategories = reindexSiblingGroups(
+          categoriesAfterPromote.filter((category) => !removedIds.has(category.id)),
         );
         const budgetItems =
           action.behavior === "delete"
-            ? plan.budgetItems.filter((item) => item.categoryId !== action.categoryId)
+            ? plan.budgetItems.filter(
+                (item) => item.categoryId === null || !removedIds.has(item.categoryId),
+              )
             : plan.budgetItems.map((item) =>
-                item.categoryId === action.categoryId
+                item.categoryId !== null && removedIds.has(item.categoryId)
                   ? { ...item, categoryId: null }
                   : item,
               );
         return { ...plan, categories: remainingCategories, budgetItems };
+      });
+
+    case "MOVE_CATEGORY":
+      return withPlan(state, (plan) => {
+        const moving = plan.categories.find(
+          (category) => category.id === action.categoryId,
+        );
+        if (!moving) return plan;
+        if ((moving.parentCategoryId ?? null) === action.newParentId) return plan;
+        if (wouldCreateCycle(plan.categories, action.categoryId, action.newParentId)) {
+          return plan;
+        }
+
+        const targetSiblings = plan.categories
+          .filter(
+            (category) =>
+              (category.parentCategoryId ?? null) === action.newParentId &&
+              category.id !== action.categoryId,
+          )
+          .sort((a, b) => a.sortOrder - b.sortOrder);
+        const insertIndex =
+          action.index === undefined
+            ? targetSiblings.length
+            : Math.max(0, Math.min(action.index, targetSiblings.length));
+
+        return {
+          ...plan,
+          categories: reindexSiblingGroups(
+            plan.categories.map((category) =>
+              category.id === action.categoryId
+                ? {
+                    ...category,
+                    parentCategoryId: action.newParentId,
+                    // Fractional order slots between the new siblings; the
+                    // reindex pass renumbers the group densely.
+                    sortOrder:
+                      insertIndex === 0
+                        ? (targetSiblings[0]?.sortOrder ?? 0) - 1
+                        : targetSiblings[insertIndex - 1].sortOrder + 0.5,
+                    updatedAt: new Date().toISOString(),
+                  }
+                : category,
+            ),
+          ),
+        };
       });
 
     case "REORDER_CATEGORIES":
@@ -695,12 +789,12 @@ function budgetReducer(state: BudgetStoreState, action: BudgetAction): BudgetSto
         );
         return {
           ...plan,
-          categories: plan.categories.map((category) => ({
-            ...category,
-            sortOrder: orderMap.has(category.id)
-              ? (orderMap.get(category.id) as number)
-              : category.sortOrder,
-          })),
+          categories: plan.categories.map((category) =>
+            (category.parentCategoryId ?? null) === action.parentId &&
+            orderMap.has(category.id)
+              ? { ...category, sortOrder: orderMap.get(category.id) as number }
+              : category,
+          ),
         };
       });
 
@@ -803,7 +897,7 @@ function budgetReducer(state: BudgetStoreState, action: BudgetAction): BudgetSto
     case "LOAD_SAVED_BUDGET": {
       const budget = state.savedBudgets.find((item) => item.id === action.budgetId);
       if (!budget) return state;
-      const plan = planFromSerializedV3(budget.data);
+      const plan = planFromSerialized(budget.data);
       plan.name = budget.name;
       return {
         ...state,
@@ -850,10 +944,25 @@ interface BudgetContextType {
   removeIncomeItem: (id: string) => void;
 
   // categories
-  addCategory: (name: string, targetPercentage?: number) => BudgetCategory;
+  addCategory: (
+    name: string,
+    options?: { targetPercentage?: number; parentCategoryId?: string | null },
+  ) => BudgetCategory;
   renameCategory: (categoryId: string, name: string) => void;
-  deleteCategory: (categoryId: string, behavior: "keep" | "delete") => void;
-  reorderCategories: (orderedCategoryIds: string[]) => void;
+  deleteCategory: (
+    categoryId: string,
+    behavior: "keep" | "delete",
+    childBehavior?: "promote" | "delete-subtree",
+  ) => void;
+  moveCategory: (
+    categoryId: string,
+    newParentId: string | null,
+    index?: number,
+  ) => boolean;
+  reorderCategories: (
+    parentId: string | null,
+    orderedCategoryIds: string[],
+  ) => void;
   updateCategoryTarget: (categoryId: string, targetPercentage: number) => void;
   setCategoryTargets: (targets: Record<string, number>) => void;
 
@@ -871,11 +980,13 @@ interface BudgetContextType {
   getTotalBudgeted: () => number;
   getUnbudgetedAmount: () => number;
   getTotalForCategory: (categoryId: string | null) => number;
+  getSubtreeTotalForCategory: (categoryId: string) => number;
+  getEffectiveTargetForCategory: (categoryId: string) => number;
 
   // data ops
   clearAllData: () => void;
-  importBudget: (data: SerializedBudgetV3) => void;
-  exportBudget: () => SerializedBudgetV3;
+  importBudget: (data: AnySerializedBudget) => void;
+  exportBudget: () => SerializedBudgetV4;
   setCurrentBudgetName: (name: string | undefined) => void;
   saveCurrentBudget: (name?: string) => SavedBudget;
   loadSavedBudget: (id: string) => boolean;
@@ -1126,13 +1237,20 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // --- categories ---
-  const addCategory = useCallback((name: string, targetPercentage?: number) => {
-    const category = createCategory(latestStoreStateRef.current.currentPlan, name, {
-      targetPercentage,
-    });
-    dispatch({ type: "ADD_CATEGORY", category });
-    return category;
-  }, []);
+  const addCategory = useCallback(
+    (
+      name: string,
+      options?: { targetPercentage?: number; parentCategoryId?: string | null },
+    ) => {
+      const category = createCategory(latestStoreStateRef.current.currentPlan, name, {
+        targetPercentage: options?.targetPercentage,
+        parentCategoryId: options?.parentCategoryId ?? null,
+      });
+      dispatch({ type: "ADD_CATEGORY", category });
+      return category;
+    },
+    [],
+  );
 
   const renameCategory = useCallback((categoryId: string, name: string) => {
     const trimmed = name.trim();
@@ -1141,15 +1259,32 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const deleteCategory = useCallback(
-    (categoryId: string, behavior: "keep" | "delete") => {
-      dispatch({ type: "DELETE_CATEGORY", categoryId, behavior });
+    (
+      categoryId: string,
+      behavior: "keep" | "delete",
+      childBehavior: "promote" | "delete-subtree" = "promote",
+    ) => {
+      dispatch({ type: "DELETE_CATEGORY", categoryId, behavior, childBehavior });
     },
     [],
   );
 
-  const reorderCategories = useCallback((orderedCategoryIds: string[]) => {
-    dispatch({ type: "REORDER_CATEGORIES", orderedCategoryIds });
-  }, []);
+  const moveCategory = useCallback(
+    (categoryId: string, newParentId: string | null, index?: number): boolean => {
+      const categories = latestStoreStateRef.current.currentPlan.categories;
+      if (wouldCreateCycle(categories, categoryId, newParentId)) return false;
+      dispatch({ type: "MOVE_CATEGORY", categoryId, newParentId, index });
+      return true;
+    },
+    [],
+  );
+
+  const reorderCategories = useCallback(
+    (parentId: string | null, orderedCategoryIds: string[]) => {
+      dispatch({ type: "REORDER_CATEGORIES", parentId, orderedCategoryIds });
+    },
+    [],
+  );
 
   const updateCategoryTarget = useCallback(
     (categoryId: string, targetPercentage: number) => {
@@ -1214,15 +1349,23 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
     (categoryId: string | null) => getTotalForCategory(plan, categoryId),
     [plan],
   );
+  const getSubtreeTotalForCategoryCb = useCallback(
+    (categoryId: string) => getSubtreeItemTotal(plan, categoryId),
+    [plan],
+  );
+  const getEffectiveTargetForCategoryCb = useCallback(
+    (categoryId: string) => getEffectiveTarget(plan, categoryId),
+    [plan],
+  );
 
   // --- data ops ---
   const clearAllData = useCallback(() => dispatch({ type: "CLEAR_ALL" }), []);
 
-  const importBudget = useCallback((data: SerializedBudgetV3) => {
-    dispatch({ type: "IMPORT_PLAN", plan: planFromSerializedV3(data) });
+  const importBudget = useCallback((data: AnySerializedBudget) => {
+    dispatch({ type: "IMPORT_PLAN", plan: planFromSerialized(data) });
   }, []);
 
-  const exportBudget = useCallback((): SerializedBudgetV3 => serializePlan(plan), [plan]);
+  const exportBudget = useCallback((): SerializedBudgetV4 => serializePlan(plan), [plan]);
 
   const setCurrentBudgetName = useCallback((name: string | undefined) => {
     dispatch({ type: "SET_CURRENT_BUDGET_NAME", name });
@@ -1295,6 +1438,7 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
         addCategory,
         renameCategory,
         deleteCategory,
+        moveCategory,
         reorderCategories,
         updateCategoryTarget,
         setCategoryTargets,
@@ -1307,6 +1451,8 @@ export function BudgetProvider({ children }: { children: ReactNode }) {
         getTotalBudgeted: getTotalBudgetedCb,
         getUnbudgetedAmount: getUnbudgetedAmountCb,
         getTotalForCategory: getTotalForCategoryCb,
+        getSubtreeTotalForCategory: getSubtreeTotalForCategoryCb,
+        getEffectiveTargetForCategory: getEffectiveTargetForCategoryCb,
         clearAllData,
         importBudget,
         exportBudget,

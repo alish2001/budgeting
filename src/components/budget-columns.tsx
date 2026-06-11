@@ -19,7 +19,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { useBudget } from "@/lib/budget-context";
-import { getSortedCategories, getUnassignedItems } from "@/lib/budget-plan";
+import { getTopLevelCategories, getUnassignedItems } from "@/lib/budget-plan";
 import {
   CategoryCard,
   IncomeCard,
@@ -32,7 +32,7 @@ export function BudgetColumns() {
   const { state, moveBudgetItem } = useBudget();
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
 
-  const categories = useMemo(() => getSortedCategories(state), [state]);
+  const categories = useMemo(() => getTopLevelCategories(state), [state]);
   const unassigned = useMemo(() => getUnassignedItems(state), [state]);
 
   const sensors = useSensors(
@@ -101,18 +101,12 @@ export function BudgetColumns() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: (index + 1) * 0.05, ease: "easeOut" }}
           >
-            <SortableContext
-              items={state.budgetItems
-                .filter((item) => item.categoryId === category.id)
-                .map((item) => item.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              <CategoryCard
-                category={category}
-                isFirst={index === 0}
-                isLast={index === categories.length - 1}
-              />
-            </SortableContext>
+            {/* Each card / subcategory section owns its SortableContext. */}
+            <CategoryCard
+              category={category}
+              isFirst={index === 0}
+              isLast={index === categories.length - 1}
+            />
           </motion.div>
         ))}
 

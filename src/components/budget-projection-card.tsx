@@ -30,9 +30,10 @@ import { formatCurrency } from "@/lib/utils";
 import { useDesignLanguage } from "@/lib/design-language-context";
 import { getItemizedPalette, resolveCategoryColor } from "@/lib/design-language";
 import {
+  getCategoriesInTreeOrder,
   getItemsForCategory,
-  getSortedCategories,
-  getTotalForCategory,
+  getSubtreeItemTotal,
+  getTopLevelCategories,
 } from "@/lib/budget-plan";
 
 type AssumptionMode = "monthly" | "yearly";
@@ -125,14 +126,15 @@ export function BudgetProjectionCard() {
   const monthlyFactor = assumptionMode === "monthly" ? 1 : 1 / 12;
   const monthlyIncome = totalIncome * monthlyFactor;
 
-  const categories = useMemo(() => getSortedCategories(state), [state]);
+  const categories = useMemo(() => getTopLevelCategories(state), [state]);
 
+  // One series per top-level category, rolled up over its whole subtree.
   const categorySeries = useMemo<SeriesMeta[]>(
     () =>
       categories.map((category) => ({
         key: `cat-${category.id}`,
         label: category.name,
-        monthlyAmount: getTotalForCategory(state, category.id) * monthlyFactor,
+        monthlyAmount: getSubtreeItemTotal(state, category.id) * monthlyFactor,
         color: resolveCategoryColor(category.colorToken, category.sortOrder, designLanguage),
       })),
     [categories, state, monthlyFactor, designLanguage],
@@ -141,7 +143,7 @@ export function BudgetProjectionCard() {
   const itemSeries = useMemo<SeriesMeta[]>(() => {
     const palette = getItemizedPalette(designLanguage);
     let paletteIndex = 0;
-    return categories.flatMap((category) =>
+    return getCategoriesInTreeOrder(state).flatMap(({ category }) =>
       getItemsForCategory(state, category.id).map((item, index) => {
         const color = palette[paletteIndex % palette.length];
         paletteIndex += 1;
@@ -153,7 +155,7 @@ export function BudgetProjectionCard() {
         };
       }),
     );
-  }, [categories, state, monthlyFactor, designLanguage]);
+  }, [state, monthlyFactor, designLanguage]);
 
   const monthlyBudgetedTotal = useMemo(
     () => categorySeries.reduce((sum, series) => sum + series.monthlyAmount, 0),

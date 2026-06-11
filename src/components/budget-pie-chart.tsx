@@ -9,8 +9,9 @@ import { formatCurrency } from "@/lib/utils";
 import { useDesignLanguage } from "@/lib/design-language-context";
 import { getUnassignedColor, resolveCategoryColor } from "@/lib/design-language";
 import {
-  getSortedCategories,
-  getTotalForCategory,
+  getEffectiveTarget,
+  getSubtreeItemTotal,
+  getTopLevelCategories,
   getUnassignedItems,
 } from "@/lib/budget-plan";
 
@@ -37,15 +38,17 @@ export function BudgetPieChart() {
   const chartData: ChartData[] = useMemo(() => {
     const segments: ChartData[] = [];
 
-    for (const category of getSortedCategories(state)) {
-      const total = getTotalForCategory(state, category.id);
+    // One slice per top-level category, rolled up over its whole subtree —
+    // every item lands in exactly one slice.
+    for (const category of getTopLevelCategories(state)) {
+      const total = getSubtreeItemTotal(state, category.id);
       if (total > 0) {
         segments.push({
           name: category.name,
           value: total,
           color: resolveCategoryColor(category.colorToken, category.sortOrder, designLanguage),
           selectionId: category.id,
-          target: category.targetPercentage,
+          target: getEffectiveTarget(state, category.id),
           percentage: totalIncome > 0 ? (total / totalIncome) * 100 : 0,
           isUnbudgeted: false,
         });

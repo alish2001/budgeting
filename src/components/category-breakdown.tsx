@@ -16,15 +16,19 @@ import {
 } from "@/lib/design-language";
 import {
   getCategoryById,
+  getCategoryPathLabel,
+  getChildCategories,
   getItemsForCategory,
   getSortedIncomeItems,
+  getSubtreeItemTotal,
 } from "@/lib/budget-plan";
 
 interface ItemChartData {
   name: string;
   value: number;
   percentage: number;
-  [key: string]: string | number;
+  drillId?: string;
+  [key: string]: string | number | undefined;
 }
 
 function generateDistinctColors(count: number, palette: readonly string[]): string[] {
@@ -58,7 +62,7 @@ export function CategoryBreakdown() {
     : isUnassignedView
     ? "Unassigned Breakdown"
     : category
-    ? `${category.name} Breakdown`
+    ? `${getCategoryPathLabel(state, category.id)} Breakdown`
     : "";
 
   const color = isIncomeView
@@ -69,12 +73,15 @@ export function CategoryBreakdown() {
     ? resolveCategoryColor(category.colorToken, category.sortOrder, designLanguage)
     : "#64748b";
 
+  // Direct items, plus — for a category view — one entry per child category
+  // valued at its subtree total (click to drill down).
   const items = useMemo(() => {
     if (isIncomeView) {
       return getSortedIncomeItems(state).map((item) => ({
         id: item.id,
         label: item.label,
         amount: item.amount,
+        drillId: undefined as string | undefined,
       }));
     }
     if (isUnassignedView) {
@@ -82,14 +89,24 @@ export function CategoryBreakdown() {
         id: item.id,
         label: item.label,
         amount: item.amount,
+        drillId: undefined as string | undefined,
       }));
     }
     if (category) {
-      return getItemsForCategory(state, category.id).map((item) => ({
-        id: item.id,
-        label: item.label,
-        amount: item.amount,
-      }));
+      return [
+        ...getItemsForCategory(state, category.id).map((item) => ({
+          id: item.id,
+          label: item.label,
+          amount: item.amount,
+          drillId: undefined as string | undefined,
+        })),
+        ...getChildCategories(state, category.id).map((child) => ({
+          id: child.id,
+          label: child.name,
+          amount: getSubtreeItemTotal(state, child.id),
+          drillId: child.id as string | undefined,
+        })),
+      ];
     }
     return [];
   }, [state, isIncomeView, isUnassignedView, category]);
@@ -99,7 +116,7 @@ export function CategoryBreakdown() {
     : isUnassignedView
     ? getTotalForCategory(null)
     : category
-    ? getTotalForCategory(category.id)
+    ? getSubtreeItemTotal(state, category.id)
     : 0;
 
   const unbudgetedAmount = getUnbudgetedAmount();
@@ -110,6 +127,7 @@ export function CategoryBreakdown() {
         name: item.label,
         value: item.amount,
         percentage: categoryTotal > 0 ? (item.amount / categoryTotal) * 100 : 0,
+        drillId: item.drillId,
       })),
     [items, categoryTotal],
   );
@@ -137,7 +155,14 @@ export function CategoryBreakdown() {
               <CardTitle className="text-lg">{title}</CardTitle>
             </motion.div>
             <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.08 }}>
-              <Button variant="ghost" size="sm" onClick={() => setSelectedCategory(null)} className="text-muted-foreground hover:text-foreground">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  setSelectedCategory(category?.parentCategoryId ?? null)
+                }
+                className="text-muted-foreground hover:text-foreground"
+              >
                 ← Back
               </Button>
             </motion.div>
@@ -164,9 +189,30 @@ export function CategoryBreakdown() {
               <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4, delay: 0.3 }} className="h-64">
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
                   <PieChart>
-                    <Pie data={chartData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2} dataKey="value" animationBegin={0} animationDuration={800} animationEasing="ease-out">
-                      {chartData.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={colors[index]} stroke={color} strokeWidth={1} />
+                    <Pie
+                      data={chartData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={80}
+                      paddingAngle={2}
+                      dataKey="value"
+                      animationBegin={0}
+                      animationDuration={800}
+                      animationEasing="ease-out"
+                      onClick={(data) => {
+                        const drillId = (data as unknown as ItemChartData).drillId;
+                        if (drillId) setSelectedCategory(drillId);
+                      }}
+                    >
+                      {chartData.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={colors[index]}
+                          stroke={color}
+                          strokeWidth={1}
+                          style={{ cursor: entry.drillId ? "pointer" : undefined }}
+                        />
                       ))}
                     </Pie>
                     <Tooltip
@@ -198,14 +244,34 @@ export function CategoryBreakdown() {
                       exit={{ opacity: 0, x: 20 }}
                       transition={{ duration: 0.12, delay: index * 0.02 }}
                       layout
-                      className="flex items-center justify-between text-sm p-2 rounded"
-                      style={{ backgroundColor: `${colors[index]}20` }}
                     >
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colors[index] }} />
-                        <span>{item.label}</span>
-                      </div>
-                      <span className="font-medium">{formatCurrency(item.amount)}</span>
+                      {item.drillId ? (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCategory(item.drillId as string)}
+                          className="flex items-center justify-between text-sm p-2 rounded w-full text-left hover:brightness-95 dark:hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          style={{ backgroundColor: `${colors[index]}20` }}
+                          aria-label={`View ${item.label} breakdown`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colors[index] }} />
+                            <span>{item.label}</span>
+                            <span className="text-xs text-muted-foreground">subcategory ›</span>
+                          </div>
+                          <span className="font-medium">{formatCurrency(item.amount)}</span>
+                        </button>
+                      ) : (
+                        <div
+                          className="flex items-center justify-between text-sm p-2 rounded"
+                          style={{ backgroundColor: `${colors[index]}20` }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colors[index] }} />
+                            <span>{item.label}</span>
+                          </div>
+                          <span className="font-medium">{formatCurrency(item.amount)}</span>
+                        </div>
+                      )}
                     </motion.div>
                   ))}
                 </AnimatePresence>

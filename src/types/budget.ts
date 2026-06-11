@@ -62,7 +62,7 @@ export interface BudgetCategory {
   /** Stable hex color. Derived from the design-language palette at creation. */
   colorToken: string;
   sortOrder: number;
-  /** Reserved for future subcategories / budget-of-budgets. */
+  /** null / undefined = top-level; otherwise the parent category's id. */
   parentCategoryId?: BudgetCategoryId | null;
   isDefault?: boolean;
   createdAt?: string;
@@ -123,6 +123,27 @@ export interface SerializedBudgetV3 {
   unassigned?: SerializedBudgetItem[];
 }
 
+/**
+ * v4 share payload — like v3 but categories nest via `children`. The share
+ * format is ID-less, so nesting (rather than parent references) is what keeps
+ * malformed payloads structurally impossible: no orphans, no cycles.
+ */
+export interface SerializedCategoryV4 {
+  name: string;
+  targetPercentage: number;
+  items: SerializedBudgetItem[];
+  children?: SerializedCategoryV4[];
+}
+
+export interface SerializedBudgetV4 {
+  version: 4;
+  name?: string;
+  income: SerializedBudgetItem[];
+  /** Top-level categories only; subcategories nest via `children`. */
+  categories: SerializedCategoryV4[];
+  unassigned?: SerializedBudgetItem[];
+}
+
 /** Legacy v2 share payload (no version field). */
 export interface SerializedBudget {
   items: {
@@ -138,7 +159,10 @@ export interface SerializedBudget {
   };
 }
 
-export type AnySerializedBudget = SerializedBudgetV3 | SerializedBudget;
+export type AnySerializedBudget =
+  | SerializedBudgetV4
+  | SerializedBudgetV3
+  | SerializedBudget;
 
 // ---------------------------------------------------------------------------
 // Saved budgets (multi-budget storage)
@@ -149,5 +173,5 @@ export interface SavedBudget {
   name: string;
   createdAt: string;
   lastModifiedAt: string;
-  data: SerializedBudgetV3;
+  data: SerializedBudgetV4;
 }

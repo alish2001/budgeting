@@ -3,19 +3,21 @@ import {
   BudgetPlan,
   SerializedBudget,
   SerializedBudgetV3,
+  SerializedBudgetV4,
 } from "@/types/budget";
 import {
   serializePlan,
   serializedV2ToV3,
+  serializedV3ToV4,
   getSerializedPreview,
   type BudgetPreview,
 } from "@/lib/budget-plan";
 
 /**
- * Serialize a plan to the compact v3 share format.
+ * Serialize a plan to the compact v4 share format.
  * IDs are stripped since they are regenerated on import.
  */
-export function serializeBudget(plan: BudgetPlan): SerializedBudgetV3 {
+export function serializeBudget(plan: BudgetPlan): SerializedBudgetV4 {
   return serializePlan(plan);
 }
 
@@ -46,10 +48,10 @@ function looksLikeV2(value: unknown): value is SerializedBudget {
 }
 
 /**
- * Decode a shared budget code into the v3 serialized format.
- * Accepts both legacy v2 payloads and v3 payloads.
+ * Decode a shared budget code into the v4 serialized format.
+ * Accepts legacy v2 and v3 payloads as well as v4 payloads.
  */
-export function decodeBudget(code: string): SerializedBudgetV3 | null {
+export function decodeBudget(code: string): SerializedBudgetV4 | null {
   try {
     let base64 = code.replace(/-/g, "+").replace(/_/g, "/");
     while (base64.length % 4 !== 0) {
@@ -65,12 +67,16 @@ export function decodeBudget(code: string): SerializedBudgetV3 | null {
     const decompressed = pako.inflate(bytes, { to: "string" });
     const parsed = JSON.parse(decompressed);
 
+    if (parsed && parsed.version === 4 && Array.isArray(parsed.categories)) {
+      return parsed as SerializedBudgetV4;
+    }
+
     if (parsed && parsed.version === 3 && Array.isArray(parsed.categories)) {
-      return parsed as SerializedBudgetV3;
+      return serializedV3ToV4(parsed as SerializedBudgetV3);
     }
 
     if (looksLikeV2(parsed)) {
-      return serializedV2ToV3(parsed as SerializedBudget);
+      return serializedV3ToV4(serializedV2ToV3(parsed as SerializedBudget));
     }
 
     return null;
@@ -106,6 +112,6 @@ export function clearBudgetFromUrl(): void {
   window.history.replaceState({}, "", url.toString());
 }
 
-export function getBudgetPreview(data: SerializedBudgetV3): BudgetPreview {
+export function getBudgetPreview(data: SerializedBudgetV4): BudgetPreview {
   return getSerializedPreview(data);
 }

@@ -2,7 +2,11 @@
 
 import { memo, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useSortable } from "@dnd-kit/sortable";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useDroppable } from "@dnd-kit/core";
 import {
@@ -10,9 +14,14 @@ import {
   MoreVertical,
   Pencil,
   Trash2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Check,
+  CornerDownRight,
+  Target,
+  TriangleAlert,
   X,
   Plus,
   Wallet,
@@ -43,10 +52,15 @@ import {
 import { BudgetCategory, BudgetLineItem, IncomeItem } from "@/types/budget";
 import { useBudget } from "@/lib/budget-context";
 import {
+  getCategoriesInTreeOrder,
+  getCategoryPathLabel,
+  getChildCategories,
+  getDescendantCategoryIds,
   getItemsForCategory,
-  getSortedCategories,
   getSortedIncomeItems,
+  getTopLevelCategories,
   getUnassignedItems,
+  hasChildTargetOverflow,
 } from "@/lib/budget-plan";
 import { formatCurrency } from "@/lib/utils";
 import { useDesignLanguage } from "@/lib/design-language-context";
@@ -151,9 +165,12 @@ export const CategoryCard = memo(function CategoryCard({
   const {
     state,
     getTotalForCategory,
+    getSubtreeTotalForCategory,
+    getEffectiveTargetForCategory,
     getTotalIncome,
     removeBudgetItem,
     moveBudgetItem,
+    addCategory,
     renameCategory,
     deleteCategory,
     updateCategoryTarget,
@@ -168,15 +185,20 @@ export const CategoryCard = memo(function CategoryCard({
   const [isEditingTarget, setIsEditingTarget] = useState(false);
   const [draftTarget, setDraftTarget] = useState(category.targetPercentage.toString());
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isAddingSubcategory, setIsAddingSubcategory] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   const items = getItemsForCategory(state, category.id);
-  const total = getTotalForCategory(category.id);
+  const directTotal = getTotalForCategory(category.id);
+  const total = getSubtreeTotalForCategory(category.id);
   const totalIncome = getTotalIncome();
   const color = resolveCategoryColor(category.colorToken, category.sortOrder, designLanguage);
   const percentage = totalIncome > 0 ? (total / totalIncome) * 100 : 0;
   const target = category.targetPercentage;
-  const allCategories = getSortedCategories(state);
+  const effectiveTarget = getEffectiveTargetForCategory(category.id);
+  const childCategories = getChildCategories(state, category.id);
+  const showTargetOverflow = hasChildTargetOverflow(state, category.id);
+  const topLevelCategories = getTopLevelCategories(state);
 
   const { setNodeRef, isOver } = useDroppable({
     id: `zone:${category.id}`,
@@ -203,16 +225,14 @@ export const CategoryCard = memo(function CategoryCard({
     setIsEditingTarget(false);
   };
 
-  const moveCategory = (direction: -1 | 1) => {
-    const ids = allCategories.map((c) => c.id);
+  const moveCard = (direction: -1 | 1) => {
+    const ids = topLevelCategories.map((c) => c.id);
     const index = ids.indexOf(category.id);
     const swapWith = index + direction;
     if (swapWith < 0 || swapWith >= ids.length) return;
     [ids[index], ids[swapWith]] = [ids[swapWith], ids[index]];
-    reorderCategories(ids);
+    reorderCategories(null, ids);
   };
-
-  const otherCategories = allCategories.filter((c) => c.id !== category.id);
 
   return (
     <>
@@ -278,10 +298,13 @@ export const CategoryCard = memo(function CategoryCard({
                 <DropdownMenuItem onSelect={() => { setDraftTarget(target.toString()); setIsEditingTarget(true); }}>
                   <Check className="size-4" /> Set target…
                 </DropdownMenuItem>
-                <DropdownMenuItem disabled={isFirst} onSelect={() => moveCategory(-1)}>
+                <DropdownMenuItem onSelect={() => setIsAddingSubcategory(true)}>
+                  <CornerDownRight className="size-4" /> Add subcategory…
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={isFirst} onSelect={() => moveCard(-1)}>
                   <ChevronLeft className="size-4" /> Move left
                 </DropdownMenuItem>
-                <DropdownMenuItem disabled={isLast} onSelect={() => moveCategory(1)}>
+                <DropdownMenuItem disabled={isLast} onSelect={() => moveCard(1)}>
                   <ChevronRight className="size-4" /> Move right
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
@@ -329,57 +352,76 @@ export const CategoryCard = memo(function CategoryCard({
                 aria-label="Edit target percentage"
               >
                 Target: {target}%
+                {effectiveTarget !== target && (
+                  <span className="opacity-75"> ({effectiveTarget}% with subcategories)</span>
+                )}
               </button>
             )}
           </div>
+
+          {showTargetOverflow && (
+            <p className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 mt-1.5">
+              <TriangleAlert className="size-3.5 shrink-0" />
+              Subcategory targets ({effectiveTarget - target}%) exceed this category&apos;s target ({target}%)
+            </p>
+          )}
 
           <div className="flex items-baseline gap-2 mt-2">
             <span className="text-2xl font-bold">{formatCurrency(total)}</span>
             {percentage > 0 && (
               <span
                 className="text-sm font-medium"
-                style={{ color: percentage > target ? "#ef4444" : color }}
+                style={{ color: percentage > effectiveTarget ? "#ef4444" : color }}
               >
                 ({percentage.toFixed(1)}%)
               </span>
             )}
           </div>
+          {total !== directTotal && (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Direct: {formatCurrency(directTotal)} · Subcategories: {formatCurrency(total - directTotal)}
+            </p>
+          )}
         </CardHeader>
 
         <CardContent className="flex-1 flex flex-col">
-          <div className="flex-1 space-y-2 mb-4 overflow-y-auto max-h-64 min-h-12">
-            {items.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                {isOver ? "Drop here" : "No items yet"}
-              </p>
-            ) : (
-              items.map((item) =>
-                editingItemId === item.id ? (
-                  <BudgetInput
-                    key={`edit-${item.id}`}
-                    target={{ type: "category", categoryId: category.id }}
-                    item={item}
-                    onClose={() => setEditingItemId(null)}
-                  />
-                ) : (
-                  <SortableItemRow
-                    key={item.id}
-                    item={item}
-                    color={color}
-                    onEdit={() => setEditingItemId(item.id)}
-                    onRemove={() => removeBudgetItem(item.id)}
-                    moveMenu={
-                      <MoveItemMenu
-                        item={item}
-                        categories={otherCategories}
-                        onMove={(targetId) => moveBudgetItem(item.id, targetId)}
-                      />
-                    }
-                  />
+          <SortableContext
+            items={items.map((item) => item.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="flex-1 space-y-2 mb-4 overflow-y-auto max-h-64 min-h-12">
+              {items.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  {isOver ? "Drop here" : "No items yet"}
+                </p>
+              ) : (
+                items.map((item) =>
+                  editingItemId === item.id ? (
+                    <BudgetInput
+                      key={`edit-${item.id}`}
+                      target={{ type: "category", categoryId: category.id }}
+                      item={item}
+                      onClose={() => setEditingItemId(null)}
+                    />
+                  ) : (
+                    <SortableItemRow
+                      key={item.id}
+                      item={item}
+                      color={color}
+                      onEdit={() => setEditingItemId(item.id)}
+                      onRemove={() => removeBudgetItem(item.id)}
+                      moveMenu={
+                        <MoveItemMenu
+                          item={item}
+                          onMove={(targetId) => moveBudgetItem(item.id, targetId)}
+                        />
+                      }
+                    />
+                  )
                 )
-              )
-            )}
-          </div>
+              )}
+            </div>
+          </SortableContext>
 
           <AnimatePresence mode="wait">
             {isAdding ? (
@@ -401,6 +443,23 @@ export const CategoryCard = memo(function CategoryCard({
               </motion.div>
             )}
           </AnimatePresence>
+
+          {(childCategories.length > 0 || isAddingSubcategory) && (
+            <div className="mt-4 space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Subcategories
+              </p>
+              {childCategories.map((child) => (
+                <SubcategorySection key={child.id} category={child} depth={1} />
+              ))}
+              {isAddingSubcategory && (
+                <AddSubcategoryInput
+                  onAdd={(name) => addCategory(name, { parentCategoryId: category.id })}
+                  onClose={() => setIsAddingSubcategory(false)}
+                />
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -408,25 +467,368 @@ export const CategoryCard = memo(function CategoryCard({
         open={confirmDelete}
         categoryName={category.name}
         itemCount={items.length}
+        subcategoryCount={getDescendantCategoryIds(state.categories, category.id).length}
         onCancel={() => setConfirmDelete(false)}
-        onConfirm={(behavior) => {
+        onConfirm={(behavior, childBehavior) => {
           setConfirmDelete(false);
-          deleteCategory(category.id, behavior);
+          deleteCategory(category.id, behavior, childBehavior);
         }}
       />
     </>
   );
 });
 
+// ---------------------------------------------------------------------------
+// Subcategory section (recursive, rendered inside the parent's card)
+// ---------------------------------------------------------------------------
+
+function SubcategorySection({
+  category,
+  depth,
+}: {
+  category: BudgetCategory;
+  depth: number;
+}) {
+  const {
+    state,
+    getSubtreeTotalForCategory,
+    getEffectiveTargetForCategory,
+    removeBudgetItem,
+    moveBudgetItem,
+    addCategory,
+    renameCategory,
+    deleteCategory,
+    updateCategoryTarget,
+    reorderCategories,
+  } = useBudget();
+  const { designLanguage } = useDesignLanguage();
+
+  const [isExpanded, setIsExpanded] = useState(true);
+  const [isAdding, setIsAdding] = useState(false);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [draftName, setDraftName] = useState(category.name);
+  const [isEditingTarget, setIsEditingTarget] = useState(false);
+  const [draftTarget, setDraftTarget] = useState(category.targetPercentage.toString());
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isAddingSubcategory, setIsAddingSubcategory] = useState(false);
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
+  const items = getItemsForCategory(state, category.id);
+  const total = getSubtreeTotalForCategory(category.id);
+  const color = resolveCategoryColor(category.colorToken, category.sortOrder, designLanguage);
+  const target = category.targetPercentage;
+  const effectiveTarget = getEffectiveTargetForCategory(category.id);
+  const childCategories = getChildCategories(state, category.id);
+  const parentId = category.parentCategoryId ?? null;
+  const siblings = getChildCategories(state, parentId);
+  const siblingIndex = siblings.findIndex((sibling) => sibling.id === category.id);
+  const showTargetOverflow = hasChildTargetOverflow(state, category.id);
+
+  const { setNodeRef, isOver } = useDroppable({
+    id: `zone:${category.id}`,
+    data: { type: "zone", categoryId: category.id },
+  });
+
+  useEffect(() => {
+    if (isRenaming) {
+      renameInputRef.current?.focus();
+      renameInputRef.current?.select();
+    }
+  }, [isRenaming]);
+
+  const commitRename = () => {
+    const trimmed = draftName.trim();
+    if (trimmed) renameCategory(category.id, trimmed);
+    else setDraftName(category.name);
+    setIsRenaming(false);
+  };
+
+  const commitTarget = () => {
+    const value = Math.max(0, Math.min(100, Number(draftTarget) || 0));
+    updateCategoryTarget(category.id, value);
+    setIsEditingTarget(false);
+  };
+
+  const moveSibling = (direction: -1 | 1) => {
+    const ids = siblings.map((sibling) => sibling.id);
+    const swapWith = siblingIndex + direction;
+    if (swapWith < 0 || swapWith >= ids.length) return;
+    [ids[siblingIndex], ids[swapWith]] = [ids[swapWith], ids[siblingIndex]];
+    reorderCategories(parentId, ids);
+  };
+
+  return (
+    <>
+      <div
+        ref={setNodeRef}
+        className="rounded-md transition-shadow"
+        style={{ boxShadow: isOver ? `0 0 0 2px ${color}` : undefined }}
+      >
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setIsExpanded((prev) => !prev)}
+            className="text-muted-foreground/60 hover:text-foreground shrink-0"
+            aria-label={`${isExpanded ? "Collapse" : "Expand"} ${category.name}`}
+          >
+            {isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+          </button>
+          <span className="size-2 rounded-full shrink-0" style={{ backgroundColor: color }} aria-hidden />
+
+          {isRenaming ? (
+            <div className="flex items-center gap-1 flex-1 min-w-0">
+              <Input
+                ref={renameInputRef}
+                value={draftName}
+                onChange={(e) => setDraftName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitRename();
+                  if (e.key === "Escape") {
+                    setDraftName(category.name);
+                    setIsRenaming(false);
+                  }
+                }}
+                className="h-7 text-sm"
+                aria-label="Category name"
+              />
+              <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={commitRename} aria-label="Save name">
+                <Check className="size-3.5 text-green-600" />
+              </Button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setDraftName(category.name);
+                setIsRenaming(true);
+              }}
+              className="group flex items-center gap-1 min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+              aria-label={`Rename ${category.name}`}
+            >
+              <span className="text-sm font-semibold truncate">{category.name}</span>
+              <Pencil className="size-2.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+            </button>
+          )}
+
+          <span className="text-sm font-semibold shrink-0">{formatCurrency(total)}</span>
+          {target > 0 && (
+            <span
+              className="text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0"
+              style={{ backgroundColor: `${color}20`, color }}
+            >
+              {target}%{effectiveTarget !== target ? ` (${effectiveTarget}%)` : ""}
+            </span>
+          )}
+          {showTargetOverflow && (
+            <TriangleAlert
+              className="size-3.5 text-amber-600 dark:text-amber-400 shrink-0"
+              aria-label={`Subcategory targets exceed ${category.name}'s target`}
+            />
+          )}
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" aria-label={`${category.name} options`}>
+                <MoreVertical className="size-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>{category.name}</DropdownMenuLabel>
+              <DropdownMenuItem onSelect={() => { setDraftName(category.name); setIsRenaming(true); }}>
+                <Pencil className="size-4" /> Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => { setDraftTarget(target.toString()); setIsEditingTarget(true); }}>
+                <Target className="size-4" /> Set target…
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => { setIsExpanded(true); setIsAddingSubcategory(true); }}>
+                <CornerDownRight className="size-4" /> Add subcategory…
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={siblingIndex <= 0} onSelect={() => moveSibling(-1)}>
+                <ChevronUp className="size-4" /> Move up
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={siblingIndex >= siblings.length - 1} onSelect={() => moveSibling(1)}>
+                <ChevronDown className="size-4" /> Move down
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onSelect={() => setConfirmDelete(true)}
+              >
+                <Trash2 className="size-4" /> Delete category
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        {isEditingTarget && (
+          <div className="flex items-center gap-1 mt-1 ml-5">
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              value={draftTarget}
+              onChange={(e) => setDraftTarget(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitTarget();
+                if (e.key === "Escape") setIsEditingTarget(false);
+              }}
+              className="h-7 w-20 text-sm"
+              aria-label="Target percentage"
+              autoFocus
+            />
+            <span className="text-sm text-muted-foreground">%</span>
+            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={commitTarget} aria-label="Save target">
+              <Check className="size-3.5 text-green-600" />
+            </Button>
+            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setIsEditingTarget(false)} aria-label="Cancel">
+              <X className="size-3.5" />
+            </Button>
+          </div>
+        )}
+
+        {isExpanded && (
+          <div
+            className="mt-1.5 ml-1.5 pl-3 border-l-2 space-y-1.5"
+            style={{ borderColor: `${color}50` }}
+          >
+            <SortableContext
+              items={items.map((item) => item.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="space-y-1.5">
+                {items.length === 0 && childCategories.length === 0 && !isAdding && (
+                  <p className="text-xs text-muted-foreground py-1">
+                    {isOver ? "Drop here" : "No items yet"}
+                  </p>
+                )}
+                {items.map((item) =>
+                  editingItemId === item.id ? (
+                    <BudgetInput
+                      key={`edit-${item.id}`}
+                      target={{ type: "category", categoryId: category.id }}
+                      item={item}
+                      onClose={() => setEditingItemId(null)}
+                    />
+                  ) : (
+                    <SortableItemRow
+                      key={item.id}
+                      item={item}
+                      color={color}
+                      onEdit={() => setEditingItemId(item.id)}
+                      onRemove={() => removeBudgetItem(item.id)}
+                      moveMenu={
+                        <MoveItemMenu
+                          item={item}
+                          onMove={(targetId) => moveBudgetItem(item.id, targetId)}
+                        />
+                      }
+                    />
+                  )
+                )}
+              </div>
+            </SortableContext>
+
+            {isAdding ? (
+              <BudgetInput
+                target={{ type: "category", categoryId: category.id }}
+                onClose={() => setIsAdding(false)}
+              />
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => setIsAdding(true)}
+              >
+                <Plus className="size-3" /> Add item
+              </Button>
+            )}
+
+            {childCategories.map((child) => (
+              <SubcategorySection key={child.id} category={child} depth={depth + 1} />
+            ))}
+            {isAddingSubcategory && (
+              <AddSubcategoryInput
+                onAdd={(name) => addCategory(name, { parentCategoryId: category.id })}
+                onClose={() => setIsAddingSubcategory(false)}
+              />
+            )}
+          </div>
+        )}
+      </div>
+
+      <DeleteCategoryDialog
+        open={confirmDelete}
+        categoryName={category.name}
+        itemCount={items.length}
+        subcategoryCount={getDescendantCategoryIds(state.categories, category.id).length}
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={(behavior, childBehavior) => {
+          setConfirmDelete(false);
+          deleteCategory(category.id, behavior, childBehavior);
+        }}
+      />
+    </>
+  );
+}
+
+function AddSubcategoryInput({
+  onAdd,
+  onClose,
+}: {
+  onAdd: (name: string) => void;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const commit = () => {
+    const trimmed = name.trim();
+    if (trimmed) onAdd(trimmed);
+    onClose();
+  };
+
+  return (
+    <div className="flex items-center gap-1">
+      <Input
+        ref={inputRef}
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commit();
+          if (e.key === "Escape") onClose();
+        }}
+        placeholder="Subcategory name…"
+        aria-label="New subcategory name"
+        className="h-8 text-sm"
+      />
+      <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={commit} aria-label="Add subcategory">
+        <Check className="size-4 text-green-600" />
+      </Button>
+      <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={onClose} aria-label="Cancel subcategory">
+        <X className="size-4" />
+      </Button>
+    </div>
+  );
+}
+
 function MoveItemMenu({
   item,
-  categories,
   onMove,
 }: {
   item: BudgetLineItem;
-  categories: BudgetCategory[];
   onMove: (categoryId: string | null) => void;
 }) {
+  const { state } = useBudget();
+  const destinations = getCategoriesInTreeOrder(state).filter(
+    ({ category }) => category.id !== item.categoryId,
+  );
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -442,9 +844,9 @@ function MoveItemMenu({
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>Move to…</DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
-            {categories.map((category) => (
+            {destinations.map(({ category }) => (
               <DropdownMenuItem key={category.id} onSelect={() => onMove(category.id)}>
-                {category.name}
+                {getCategoryPathLabel(state, category.id)}
               </DropdownMenuItem>
             ))}
             {item.categoryId !== null && (
@@ -463,45 +865,110 @@ function DeleteCategoryDialog({
   open,
   categoryName,
   itemCount,
+  subcategoryCount,
   onCancel,
   onConfirm,
 }: {
   open: boolean;
   categoryName: string;
   itemCount: number;
+  subcategoryCount: number;
   onCancel: () => void;
-  onConfirm: (behavior: "keep" | "delete") => void;
+  onConfirm: (
+    behavior: "keep" | "delete",
+    childBehavior: "promote" | "delete-subtree",
+  ) => void;
 }) {
+  const [childBehavior, setChildBehavior] = useState<"promote" | "delete-subtree">("promote");
+
+  const handleCancel = () => {
+    setChildBehavior("promote");
+    onCancel();
+  };
+
+  const handleConfirm = (behavior: "keep" | "delete") => {
+    const chosen = childBehavior;
+    setChildBehavior("promote");
+    onConfirm(behavior, chosen);
+  };
+
+  const hasChildren = subcategoryCount > 0;
+  const hasItems = itemCount > 0;
+  const itemsLabel = `${itemCount} item${itemCount === 1 ? "" : "s"}`;
+  const subcategoriesLabel = `${subcategoryCount} ${subcategoryCount === 1 ? "subcategory" : "subcategories"}`;
+
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && onCancel()}>
+    <Dialog open={open} onOpenChange={(next) => !next && handleCancel()}>
       <DialogContent showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>Delete “{categoryName}”?</DialogTitle>
           <DialogDescription>
-            {itemCount > 0
-              ? `This category has ${itemCount} item${itemCount === 1 ? "" : "s"}. Choose what to do with them.`
+            {hasItems && hasChildren
+              ? `This category has ${itemsLabel} and ${subcategoriesLabel}.`
+              : hasItems
+              ? `This category has ${itemsLabel}. Choose what to do with them.`
+              : hasChildren
+              ? `This category has ${subcategoriesLabel}.`
               : "This category has no items."}
           </DialogDescription>
         </DialogHeader>
+
+        {hasChildren && (
+          <div className="space-y-2" role="radiogroup" aria-label="What happens to subcategories">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={childBehavior === "promote"}
+              onClick={() => setChildBehavior("promote")}
+              className={`w-full text-left rounded-lg border p-3 text-sm transition-colors ${
+                childBehavior === "promote"
+                  ? "border-ring bg-accent/50"
+                  : "border-border hover:bg-muted/50"
+              }`}
+            >
+              <span className="font-medium">Promote subcategories up a level</span>
+              <span className="block text-xs text-muted-foreground mt-0.5">
+                They keep their items and move to where “{categoryName}” was.
+              </span>
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={childBehavior === "delete-subtree"}
+              onClick={() => setChildBehavior("delete-subtree")}
+              className={`w-full text-left rounded-lg border p-3 text-sm transition-colors ${
+                childBehavior === "delete-subtree"
+                  ? "border-destructive bg-destructive/10"
+                  : "border-border hover:bg-muted/50"
+              }`}
+            >
+              <span className="font-medium">Delete the whole subtree</span>
+              <span className="block text-xs text-muted-foreground mt-0.5">
+                All {subcategoryCount === 1 ? "1 subcategory is" : `${subcategoryCount} subcategories are`} deleted; the item choice below applies to their items too.
+              </span>
+            </button>
+          </div>
+        )}
+
         <DialogFooter className="sm:flex-col sm:items-stretch sm:gap-2">
-          {itemCount > 0 ? (
+          {hasItems || hasChildren ? (
             <>
-              <Button onClick={() => onConfirm("keep")}>
+              <Button onClick={() => handleConfirm("keep")}>
                 Delete category, keep items as Unassigned
               </Button>
-              <Button variant="destructive" onClick={() => onConfirm("delete")}>
+              <Button variant="destructive" onClick={() => handleConfirm("delete")}>
                 Delete category and its items
               </Button>
-              <Button variant="outline" onClick={onCancel}>
+              <Button variant="outline" onClick={handleCancel}>
                 Cancel
               </Button>
             </>
           ) : (
             <>
-              <Button variant="destructive" onClick={() => onConfirm("delete")}>
+              <Button variant="destructive" onClick={() => handleConfirm("delete")}>
                 Delete category
               </Button>
-              <Button variant="outline" onClick={onCancel}>
+              <Button variant="outline" onClick={handleCancel}>
                 Cancel
               </Button>
             </>
@@ -610,7 +1077,6 @@ export const UnassignedCard = memo(function UnassignedCard() {
   const items = getUnassignedItems(state);
   const total = getTotalForCategory(null);
   const color = getUnassignedColor(designLanguage);
-  const categories = getSortedCategories(state);
 
   const { setNodeRef, isOver } = useDroppable({
     id: "zone:unassigned",
@@ -661,7 +1127,6 @@ export const UnassignedCard = memo(function UnassignedCard() {
                   moveMenu={
                     <MoveItemMenu
                       item={item}
-                      categories={categories}
                       onMove={(targetId) => moveBudgetItem(item.id, targetId)}
                     />
                   }

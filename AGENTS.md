@@ -268,7 +268,8 @@ The application uses React Context API with `useReducer` for global state:
 
 - **State Structure**: Unified in-memory store with `currentPlan` (a `BudgetPlan`), `savedBudgets`, and `revision`
 - **Dynamic categories (v3)**: A `BudgetPlan` holds `incomeItems`, user-defined `categories`, and `budgetItems` keyed by stable IDs. Each `budgetItem.categoryId` points at zero or one category (`null` = unassigned/orphaned). This replaces the old fixed `needs/wants/savings` records.
-- **Actions**: income add/update/remove; category add/rename/delete (keep-or-delete items)/reorder/target; budget item add/update/remove/move; import, clear, save/load/rename/delete saved budgets, hydration
+- **Hierarchy (subcategories)**: categories form a tree via `parentCategoryId` (flat adjacency list, arbitrary depth). A parent is a *union*: it can hold items directly and contain children; displayed totals/targets roll up the subtree. `sortOrder` is scoped per sibling group. `normalizePlan` runs `repairCategoryTree` (orphans → top-level, cycles broken, siblings reindexed).
+- **Actions**: income add/update/remove; category add/rename/delete (keep-or-delete items × promote-or-delete-subtree children)/move (re-parent, cycle-guarded)/reorder (sibling-scoped)/target; budget item add/update/remove/move; import, clear, save/load/rename/delete saved budgets, hydration
 - **Persistence**: Debounced split-key localStorage sync under v3 keys (`oversight-current-plan-v3`, `oversight-saved-plans-v3`, `oversight-app-meta-v3`). Legacy v2 keys are read once and migrated forward on load.
 - **Hydration**: Uses `useSyncExternalStore` to prevent SSR/client mismatches
 - **Performance**: All context functions are memoized with `useCallback`; current-plan and saved-budgets slices persist independently for smaller writes
@@ -276,15 +277,16 @@ The application uses React Context API with `useReducer` for global state:
 **Key Functions** (context):
 
 - `getTotalIncome()` / `getTotalBudgeted()` / `getUnbudgetedAmount()`
-- `getTotalForCategory(categoryId | null)` - total for a category (or the unassigned lane)
+- `getTotalForCategory(categoryId | null)` - direct items only (also the unassigned lane)
+- `getSubtreeTotalForCategory(id)` / `getEffectiveTargetForCategory(id)` - rolled-up union totals/targets over a category's subtree
 - `addIncomeItem` / `updateIncomeItem` / `removeIncomeItem`
-- `addCategory(name, targetPercentage?)` / `renameCategory` / `deleteCategory(id, "keep" | "delete")` / `reorderCategories(orderedIds)`
+- `addCategory(name, { targetPercentage?, parentCategoryId? })` / `renameCategory` / `deleteCategory(id, "keep" | "delete", "promote" | "delete-subtree" = "promote")` / `moveCategory(id, newParentId | null, index?)` (returns `false` when cycle-guarded) / `reorderCategories(parentId | null, orderedIds)`
 - `updateCategoryTarget(id, pct)` / `setCategoryTargets(map)`
 - `addBudgetItem(categoryId, label, amount)` / `updateBudgetItem(id, label, amount)` / `removeBudgetItem(id)` / `moveBudgetItem(id, categoryId | null, index?)`
-- `importBudget(data)` / `exportBudget()` - v3 serialized format
+- `importBudget(data)` (accepts v2/v3/v4) / `exportBudget()` - v4 serialized format
 - `saveCurrentBudget(name?)` / `loadSavedBudget(id)` / `renameSavedBudget(id, name)` / `deleteSavedBudget(id)`
 
-**Pure helpers** live in `src/lib/budget-plan.ts`: `createDefaultPlan`, `createCategory`, `serializePlan`, `planFromSerializedV3`, `serializedV2ToV3`, plus selectors (`getSortedCategories`, `getItemsForCategory`, `getUnassignedItems`, `getTotalForCategory`, `hasPlanData`, …).
+**Pure helpers** live in `src/lib/budget-plan.ts`: `createDefaultPlan`, `createCategory`, `serializePlan` (v4), `planFromSerialized` (v2/v3/v4 dispatcher), `serializedV2ToV3`, `serializedV3ToV4`, plus selectors (`getSortedCategories`, `getItemsForCategory`, `getUnassignedItems`, `getTotalForCategory`, `hasPlanData`, …) and tree helpers (`getTopLevelCategories`, `getChildCategories`, `getCategoriesInTreeOrder` (DFS + depth), `getCategoryPathLabel` ("Needs › Housing"), `getDescendantCategoryIds`, `getSubtreeItemTotal`, `getEffectiveTarget`, `hasChildTargetOverflow`, `wouldCreateCycle`, `repairCategoryTree`, `promoteChildrenOf`, …).
 
 ### Design Language State Management
 
@@ -310,11 +312,12 @@ The application uses a dedicated context for UI design language selection:
 
 - `BudgetItem`: `{ id, label, amount }` (shared primitive)
 - `BudgetPlan`: the v3 domain model — `{ id, name?, incomeItems, categories, budgetItems, settings, selectedCategoryId, … }`
-- `BudgetCategory`: `{ id, name, targetPercentage, colorToken, sortOrder, parentCategoryId?, isDefault? }` (`parentCategoryId` reserved for future subcategories)
+- `BudgetCategory`: `{ id, name, targetPercentage, colorToken, sortOrder, parentCategoryId?, isDefault? }` (`parentCategoryId` = null/undefined for top-level; `sortOrder` is sibling-scoped)
 - `BudgetLineItem`: `{ id, label, amount, categoryId: string | null, sortOrder }`
 - `IncomeItem`: `{ id, label, amount, sortOrder }`
-- `SerializedBudgetV3`: `{ version: 3, name?, income, categories[], unassigned? }` (compact share format, no IDs)
-- `SavedBudget`: Stored budget with id, name, timestamps, and v3 serialized data
+- `SerializedBudgetV4`: `{ version: 4, name?, income, categories[], unassigned? }` — like v3 but categories nest via `children` (compact share format, no IDs)
+- `SerializedBudgetV3`: `{ version: 3, … }` flat predecessor; still accepted on import
+- `SavedBudget`: Stored budget with id, name, timestamps, and v4 serialized data (stored v3 payloads upgrade on read)
 - **Legacy (retained for migration/onboarding defaults)**: `CategoryName`, `SpendingCategoryName`, `CATEGORY_CONFIG`, `SerializedBudget` (v2)
 
 ### Component Architecture
@@ -420,9 +423,9 @@ RootLayout (layout.tsx)
 
 The sharing system uses compression and URL-safe encoding:
 
-- `serializeBudget(state)` - Convert state to compact JSON (strips IDs)
+- `serializeBudget(state)` - Convert state to compact v4 JSON (strips IDs; subcategories nest via `children`)
 - `encodeBudget(state)` - Compress with pako + base64url encode
-- `decodeBudget(code)` - Decode and decompress shared code
+- `decodeBudget(code)` - Decode and decompress shared code (accepts v2/v3/v4, returns v4)
 - `generateShareUrl(state)` - Create full URL with `?budget=` param
 - `getBudgetCodeFromUrl()` - Extract code from URL parameter
 - `clearBudgetFromUrl()` - Remove param without page reload
