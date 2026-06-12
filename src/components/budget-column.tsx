@@ -410,12 +410,25 @@ export const CategoryCard = memo(function CategoryCard({
 
         <CardContent className="flex-1 flex flex-col">
           {/* Items and subcategory cards share one list: a subcategory is a
-              "card within the card", a peer of the items around it. */}
+              "card within the card", a peer of the items around it.
+              Subcategories render first so the hierarchy reads top-down,
+              with the category's direct line items after them. */}
           <div
             className={`flex-1 space-y-2 mb-4 overflow-y-auto min-h-12 ${
               childCategories.length > 0 ? "max-h-[28rem]" : "max-h-64"
             }`}
           >
+            {childCategories.map((child) => (
+              <SubcategoryCard key={child.id} category={child} depth={1} />
+            ))}
+
+            {isAddingSubcategory && (
+              <AddSubcategoryInput
+                onAdd={(name) => addCategory(name, { parentCategoryId: category.id })}
+                onClose={() => setIsAddingSubcategory(false)}
+              />
+            )}
+
             <SortableContext
               items={items.map((item) => item.id)}
               strategy={verticalListSortingStrategy}
@@ -445,17 +458,6 @@ export const CategoryCard = memo(function CategoryCard({
                 )
               )}
             </SortableContext>
-
-            {childCategories.map((child) => (
-              <SubcategoryCard key={child.id} category={child} depth={1} />
-            ))}
-
-            {isAddingSubcategory && (
-              <AddSubcategoryInput
-                onAdd={(name) => addCategory(name, { parentCategoryId: category.id })}
-                onClose={() => setIsAddingSubcategory(false)}
-              />
-            )}
 
             {items.length === 0 && childCategories.length === 0 && !isAddingSubcategory && (
               <p className="text-sm text-muted-foreground text-center py-4">
@@ -745,6 +747,17 @@ function SubcategoryCard({
 
         {isExpanded && (
           <div className="px-2 pb-2 space-y-2">
+            {childCategories.map((child) => (
+              <SubcategoryCard key={child.id} category={child} depth={depth + 1} />
+            ))}
+
+            {isAddingSubcategory && (
+              <AddSubcategoryInput
+                onAdd={(name) => addCategory(name, { parentCategoryId: category.id })}
+                onClose={() => setIsAddingSubcategory(false)}
+              />
+            )}
+
             <SortableContext
               items={items.map((item) => item.id)}
               strategy={verticalListSortingStrategy}
@@ -774,17 +787,6 @@ function SubcategoryCard({
                 )
               )}
             </SortableContext>
-
-            {childCategories.map((child) => (
-              <SubcategoryCard key={child.id} category={child} depth={depth + 1} />
-            ))}
-
-            {isAddingSubcategory && (
-              <AddSubcategoryInput
-                onAdd={(name) => addCategory(name, { parentCategoryId: category.id })}
-                onClose={() => setIsAddingSubcategory(false)}
-              />
-            )}
 
             {items.length === 0 && childCategories.length === 0 && !isAdding && !isAddingSubcategory && (
               <p className="text-xs text-muted-foreground py-1">

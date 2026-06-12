@@ -73,8 +73,9 @@ export function CategoryBreakdown() {
     ? resolveCategoryColor(category.colorToken, category.sortOrder, designLanguage)
     : "#64748b";
 
-  // Direct items, plus — for a category view — one entry per child category
-  // valued at its subtree total (click to drill down).
+  // For a category view: one entry per child category valued at its subtree
+  // total (click to drill down), listed before the direct items so the
+  // hierarchy reads subcategories-first.
   const items = useMemo(() => {
     if (isIncomeView) {
       return getSortedIncomeItems(state).map((item) => ({
@@ -94,17 +95,17 @@ export function CategoryBreakdown() {
     }
     if (category) {
       return [
-        ...getItemsForCategory(state, category.id).map((item) => ({
-          id: item.id,
-          label: item.label,
-          amount: item.amount,
-          drillId: undefined as string | undefined,
-        })),
         ...getChildCategories(state, category.id).map((child) => ({
           id: child.id,
           label: child.name,
           amount: getSubtreeItemTotal(state, child.id),
           drillId: child.id as string | undefined,
+        })),
+        ...getItemsForCategory(state, category.id).map((item) => ({
+          id: item.id,
+          label: item.label,
+          amount: item.amount,
+          drillId: undefined as string | undefined,
         })),
       ];
     }
