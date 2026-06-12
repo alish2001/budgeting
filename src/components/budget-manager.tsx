@@ -8,8 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useBudget } from "@/lib/budget-context";
 import { formatBudgetDate, generateBudgetName } from "@/lib/budget-storage";
-import { SavedBudget, SerializedBudgetV3 } from "@/types/budget";
-import { hasPlanData } from "@/lib/budget-plan";
+import { SavedBudget, SerializedBudgetV4 } from "@/types/budget";
+import { getSerializedPreview, hasPlanData } from "@/lib/budget-plan";
 import { formatCurrency } from "@/lib/utils";
 import {
   ChevronDown,
@@ -93,15 +93,9 @@ export function BudgetManager() {
     setEditName("");
   }, []);
 
-  const getBudgetSummary = (data: SerializedBudgetV3) => {
-    const totalIncome = data.income.reduce((sum, item) => sum + item.amount, 0);
-    const categoryItems = data.categories.reduce(
-      (sum, category) => sum + category.items.length,
-      0,
-    );
-    const totalItems =
-      categoryItems + (data.unassigned?.length ?? 0) + data.income.length;
-    return { totalIncome, totalItems };
+  const getBudgetSummary = (data: SerializedBudgetV4) => {
+    const preview = getSerializedPreview(data);
+    return { totalIncome: preview.totalIncome, totalItems: preview.itemCount };
   };
 
   if (!isHydrated) return null;

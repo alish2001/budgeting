@@ -90,6 +90,10 @@ export function getCategoryColorByIndex(
  * Resolve a category's display color. We prefer the live design-language
  * palette (so theme switches restyle every category), falling back to the
  * stored colorToken for custom hues that fall outside the palette.
+ *
+ * Known tokens remap by their position within their own palette (not by
+ * sortOrder, which is sibling-scoped under category hierarchies and would
+ * collide across depths).
  */
 export function resolveCategoryColor(
   colorToken: string,
@@ -97,13 +101,11 @@ export function resolveCategoryColor(
   designLanguage: DesignLanguage,
 ): string {
   const palette = CATEGORY_PALETTE_BY_LANGUAGE[designLanguage];
-  // If the stored token is part of any known palette, treat it as a themed
-  // slot and remap to the current language by position for consistency.
-  const isKnownToken = Object.values(CATEGORY_PALETTE_BY_LANGUAGE).some(
-    (colors) => colors.includes(colorToken),
-  );
-  if (isKnownToken) {
-    return palette[((sortIndex % palette.length) + palette.length) % palette.length];
+  for (const colors of Object.values(CATEGORY_PALETTE_BY_LANGUAGE)) {
+    const tokenIndex = colors.indexOf(colorToken);
+    if (tokenIndex !== -1) {
+      return palette[tokenIndex % palette.length];
+    }
   }
   return colorToken;
 }

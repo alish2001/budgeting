@@ -14,7 +14,7 @@ import {
   getSerializedPreview,
 } from "@/lib/budget-plan";
 import { encodeBudget, decodeBudget } from "@/lib/budget-serialization";
-import type { SerializedBudget, SerializedBudgetV3 } from "@/types/budget";
+import type { SerializedBudget, SerializedBudgetV4 } from "@/types/budget";
 
 describe("createDefaultPlan", () => {
   test("seeds Needs / Wants / Savings at 50/30/20", () => {
@@ -100,7 +100,7 @@ describe("serialize / encode round-trips", () => {
 });
 
 describe("decodeBudget accepts legacy v2 share codes", () => {
-  test("a v2-style payload decodes into v3", () => {
+  test("a v2-style payload decodes into v4", () => {
     // Manually craft a v2 encoded code using the legacy shape.
     const v2: SerializedBudget = {
       items: {
@@ -118,8 +118,8 @@ describe("decodeBudget accepts legacy v2 share codes", () => {
       .replace(/\//g, "_")
       .replace(/=+$/, "");
 
-    const decoded = decodeBudget(base64) as SerializedBudgetV3;
-    expect(decoded.version).toBe(3);
+    const decoded = decodeBudget(base64) as SerializedBudgetV4;
+    expect(decoded.version).toBe(4);
     expect(decoded.categories.map((c) => c.name)).toEqual(["Needs", "Wants", "Savings"]);
     expect(decoded.income).toEqual([{ label: "Salary", amount: 3000 }]);
   });

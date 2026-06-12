@@ -10,12 +10,14 @@ import { KeyboardShortcut } from "./keyboard-shortcut";
 
 interface CategoryNameFormProps {
   mode: "add" | "rename";
+  /** Overrides the default heading (e.g. "Add Subcategory to Needs › Housing"). */
+  title?: string;
   initialName?: string;
   onSubmit: (name: string) => void;
   onCancel: () => void;
 }
 
-export function CategoryNameForm({ mode, initialName = "", onSubmit, onCancel }: CategoryNameFormProps) {
+export function CategoryNameForm({ mode, title, initialName = "", onSubmit, onCancel }: CategoryNameFormProps) {
   const [name, setName] = useState(initialName);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -40,9 +42,11 @@ export function CategoryNameForm({ mode, initialName = "", onSubmit, onCancel }:
         <Button type="button" variant="ghost" size="icon-sm" onClick={onCancel} className="rounded-md" aria-label="Go back">
           <ArrowLeft className="size-4" />
         </Button>
-        <h3 className="font-semibold flex items-center gap-2">
-          <Tag className="size-4" />
-          {mode === "add" ? "Add Category" : "Rename Category"}
+        <h3 className="font-semibold flex items-center gap-2 min-w-0">
+          <Tag className="size-4 shrink-0" />
+          <span className="truncate">
+            {title ?? (mode === "add" ? "Add Category" : "Rename Category")}
+          </span>
         </h3>
         <KeyboardShortcut shortcut="ESC" />
       </div>

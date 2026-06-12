@@ -23,9 +23,14 @@ export type PaletteMode =
   | { type: "move-item-search" }
   | { type: "move-item-target"; itemId: string; itemLabel: string }
   | { type: "add-category" }
+  | { type: "add-subcategory-pick" }
+  | { type: "add-subcategory"; parentId: string; parentLabel: string }
+  | { type: "move-category-pick" }
+  | { type: "move-category-target"; categoryId: string; categoryLabel: string }
   | { type: "rename-category-pick" }
   | { type: "rename-category"; categoryId: string }
   | { type: "delete-category-pick" }
+  | { type: "delete-category-confirm"; categoryId: string }
   | { type: "set-target-pick" }
   | { type: "set-target"; categoryId: string }
   | { type: "confirm-clear" }

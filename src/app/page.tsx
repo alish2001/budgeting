@@ -32,7 +32,11 @@ import {
 } from "react";
 import { useDesignLanguage } from "@/lib/design-language-context";
 import { resolveCategoryColor } from "@/lib/design-language";
-import { getSortedCategories, hasPlanData } from "@/lib/budget-plan";
+import {
+  getEffectiveTarget,
+  getTopLevelCategories,
+  hasPlanData,
+} from "@/lib/budget-plan";
 import { hasSkippedOnboarding } from "@/lib/onboarding-gate";
 import { cn } from "@/lib/utils";
 
@@ -150,13 +154,13 @@ function GettingStarted() {
 }
 
 function BudgetComparison() {
-  const { state, getTotalIncome, getTotalForCategory, getUnbudgetedAmount } =
+  const { state, getTotalIncome, getSubtreeTotalForCategory, getUnbudgetedAmount } =
     useBudget();
   const { designLanguage } = useDesignLanguage();
   const isDelight = designLanguage === "delight";
   const totalIncome = getTotalIncome();
   const unbudgeted = getUnbudgetedAmount();
-  const categories = getSortedCategories(state);
+  const categories = getTopLevelCategories(state);
 
   if (totalIncome === 0) return null;
 
@@ -173,9 +177,9 @@ function BudgetComparison() {
       <div className="space-y-5 sm:space-y-4">
         {categories.map((category, index) => {
           const color = resolveCategoryColor(category.colorToken, category.sortOrder, designLanguage);
-          const total = getTotalForCategory(category.id);
+          const total = getSubtreeTotalForCategory(category.id);
           const actual = totalIncome > 0 ? (total / totalIncome) * 100 : 0;
-          const target = category.targetPercentage;
+          const target = getEffectiveTarget(state, category.id);
           const diff = actual - target;
           const diffBadgeClass = isDelight
             ? Math.abs(diff) <= 5
@@ -342,7 +346,7 @@ function BudgetDashboard() {
   const { state } = useBudget();
   const { designLanguage } = useDesignLanguage();
   const isDelight = designLanguage === "delight";
-  const categories = getSortedCategories(state);
+  const categories = getTopLevelCategories(state);
 
   return (
     <div
@@ -430,7 +434,7 @@ function BudgetDashboard() {
                     style={{ backgroundColor: resolveCategoryColor(category.colorToken, category.sortOrder, designLanguage) }}
                   />
                   <span>
-                    <strong>{category.targetPercentage}%</strong> {category.name}
+                    <strong>{getEffectiveTarget(state, category.id)}%</strong> {category.name}
                   </span>
                 </motion.div>
               ))}

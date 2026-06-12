@@ -8,7 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { useBudget } from "@/lib/budget-context";
-import { getSortedCategories } from "@/lib/budget-plan";
+import {
+  getCategoriesInTreeOrder,
+  getSubtreeCategoryIds,
+  getTopLevelCategories,
+} from "@/lib/budget-plan";
 import { useDesignLanguage } from "@/lib/design-language-context";
 import { resolveCategoryColor } from "@/lib/design-language";
 import {
@@ -18,13 +22,18 @@ import {
   Equal,
   Check,
   Loader2,
+  TriangleAlert,
 } from "lucide-react";
 
 export function TargetSettings() {
   const { state, setCategoryTargets } = useBudget();
   const { designLanguage } = useDesignLanguage();
 
-  const categories = useMemo(() => getSortedCategories(state), [state]);
+  const categoryRows = useMemo(() => getCategoriesInTreeOrder(state), [state]);
+  const categories = useMemo(
+    () => categoryRows.map(({ category }) => category),
+    [categoryRows],
+  );
 
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState<Record<string, number>>({});
@@ -57,6 +66,26 @@ export function TargetSettings() {
   );
   const isValid = Math.round(total) === 100;
 
+  // Per-parent soft warning, evaluated against the draft values: the
+  // children's (effective) targets exceed the parent's own explicit target.
+  const overflowByCategoryId = useMemo(() => {
+    const draftValue = (id: string) => draft[id] ?? 0;
+    const effective = (id: string) =>
+      getSubtreeCategoryIds(state.categories, id).reduce(
+        (sum, subId) => sum + draftValue(subId),
+        0,
+      );
+    const result: Record<string, number> = {};
+    for (const category of categories) {
+      const own = draftValue(category.id);
+      const childTotal = effective(category.id) - own;
+      if (own > 0 && childTotal > own) {
+        result[category.id] = childTotal;
+      }
+    }
+    return result;
+  }, [categories, draft, state.categories]);
+
   const updateValue = (categoryId: string, value: number) => {
     const clamped = Math.max(0, Math.min(100, value));
     setDraft((prev) => ({ ...prev, [categoryId]: clamped }));
@@ -73,14 +102,18 @@ export function TargetSettings() {
     }, 300);
   };
 
+  // Distribute across top-level categories and zero descendants, so the
+  // top-level effective sum lands at exactly 100.
   const handleDistributeEvenly = () => {
     if (isDistributing || categories.length === 0) return;
     setIsDistributing(true);
     setTimeout(() => {
-      const base = Math.floor(100 / categories.length);
-      const remainder = 100 - base * categories.length;
+      const topLevel = getTopLevelCategories(state);
+      const base = Math.floor(100 / topLevel.length);
+      const remainder = 100 - base * topLevel.length;
       const next: Record<string, number> = {};
-      categories.forEach((category, index) => {
+      for (const category of categories) next[category.id] = 0;
+      topLevel.forEach((category, index) => {
         next[category.id] = base + (index < remainder ? 1 : 0);
       });
       setDraft(next);
@@ -137,13 +170,14 @@ export function TargetSettings() {
                 </p>
               ) : (
                 <div className="space-y-4">
-                  {categories.map((category, index) => {
+                  {categoryRows.map(({ category, depth }, index) => {
                     const color = resolveCategoryColor(
                       category.colorToken,
                       category.sortOrder,
                       designLanguage,
                     );
                     const value = draft[category.id] ?? category.targetPercentage;
+                    const overflowChildTotal = overflowByCategoryId[category.id];
                     return (
                       <motion.div
                         key={category.id}
@@ -151,6 +185,7 @@ export function TargetSettings() {
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.15, delay: 0.05 * index }}
                         className="space-y-2 rounded-lg border border-border/60 p-3"
+                        style={{ marginLeft: depth * 16 }}
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2 min-w-0">
@@ -161,6 +196,13 @@ export function TargetSettings() {
                             {value.toFixed(0)}%
                           </span>
                         </div>
+                        {overflowChildTotal !== undefined && (
+                          <p className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300">
+                            <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
+                            Subcategory targets ({overflowChildTotal.toFixed(0)}%) exceed this
+                            category&apos;s own target ({value.toFixed(0)}%)
+                          </p>
+                        )}
                         <Slider
                           value={[value]}
                           max={100}

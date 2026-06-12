@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { clearAppStorage, goToDashboardWithData } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
@@ -6,6 +6,33 @@ test.beforeEach(async ({ page }) => {
   await clearAppStorage(page);
   await goToDashboardWithData(page);
 });
+
+/** Mouse-drag from one point to another (PointerSensor needs >5px to engage). */
+async function dragBetween(
+  page: Page,
+  from: { x: number; y: number; width: number; height: number },
+  to: { x: number; y: number; width: number; height: number },
+) {
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 10 });
+  await page.waitForTimeout(200);
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+}
+
+/** Add a subcategory through a category's kebab menu. */
+async function addSubcategory(page: Page, parentName: string, name: string) {
+  await page
+    .getByRole("button", { name: new RegExp(`${parentName} options`, "i") })
+    .first()
+    .click();
+  await page.getByRole("menuitem", { name: /add subcategory/i }).click();
+  const input = page.getByLabel(/new subcategory name/i);
+  await expect(input).toBeVisible({ timeout: 3000 });
+  await input.fill(name);
+  await input.press("Enter");
+}
 
 test.describe("category management", () => {
   test("add category via Add-category card", async ({ page }) => {
@@ -109,6 +136,47 @@ test.describe("category management", () => {
     await expect(rentItems).toHaveCount(0, { timeout: 3000 });
   });
 
+  test("delete a parent — promote subcategories up a level", async ({ page }) => {
+    await addSubcategory(page, "needs", "Housing");
+    await expect(page.getByRole("button", { name: /collapse housing/i })).toBeVisible({ timeout: 3000 });
+
+    await page.getByRole("button", { name: /needs options/i }).click();
+    await page.getByRole("menuitem", { name: /delete category/i }).click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible({ timeout: 3000 });
+    // Promote is the pre-selected default
+    await expect(dialog.getByRole("radio", { name: /promote subcategories/i })).toBeVisible();
+    await dialog.getByRole("button", { name: /keep|unassigned/i }).click();
+    await page.waitForTimeout(300);
+
+    // Needs is gone; Housing is promoted to a top-level grid card
+    await expect(page.getByRole("button", { name: /rename needs/i })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /rename housing/i })).toBeVisible({ timeout: 3000 });
+    await expect(page.getByRole("button", { name: /collapse housing/i })).toHaveCount(0);
+    // Needs' own item landed in Unassigned
+    await expect(page.getByText("Rent")).toBeVisible();
+  });
+
+  test("delete a parent — delete the whole subtree", async ({ page }) => {
+    await addSubcategory(page, "needs", "Housing");
+    await expect(page.getByRole("button", { name: /collapse housing/i })).toBeVisible({ timeout: 3000 });
+
+    await page.getByRole("button", { name: /needs options/i }).click();
+    await page.getByRole("menuitem", { name: /delete category/i }).click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible({ timeout: 3000 });
+    await dialog.getByRole("radio", { name: /delete the whole subtree/i }).click();
+    await dialog.getByRole("button", { name: /delete category and its items/i }).click();
+    await page.waitForTimeout(300);
+
+    // Needs, Housing, and the Rent item are all gone
+    await expect(page.getByRole("button", { name: /rename needs/i })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /rename housing/i })).toHaveCount(0);
+    await expect(page.getByText("Rent")).toHaveCount(0);
+  });
+
   test("reorder categories via Move left/right in dropdown menu", async ({ page }) => {
     // The initial order is Needs (0), Wants (1), Savings (2)
     // Move Wants left → should become first
@@ -123,5 +191,216 @@ test.describe("category management", () => {
 
     // Verify the category still shows up (reorder worked without crash)
     await expect(page.getByRole("button", { name: /wants options/i })).toBeVisible();
+  });
+});
+
+test.describe("subcategories", () => {
+  test("add subcategory via card menu renders a card-within-card, not a new grid card", async ({ page }) => {
+    await addSubcategory(page, "needs", "Housing");
+
+    // The collapsible mini-card header is unique to subcategory cards
+    await expect(page.getByRole("button", { name: /collapse housing/i })).toBeVisible({ timeout: 3000 });
+    // And it is draggable like an item
+    await expect(page.getByRole("button", { name: /drag housing subcategory/i })).toBeVisible();
+  });
+
+  test("dragging a subcategory card into another category re-parents its subtree", async ({ page }) => {
+    await addSubcategory(page, "needs", "Housing");
+    await expect(page.getByRole("button", { name: /collapse housing/i })).toBeVisible({ timeout: 3000 });
+
+    // Give Housing an item so we can verify the subtree travels with it
+    // (the first "+ Add Item" in DOM order is Housing's, inside the Needs card)
+    await page.getByRole("button", { name: /^\+ add item$/i }).first().click();
+    await page.getByLabel("Label").fill("Hydro");
+    await page.getByLabel(/amount/i).fill("500");
+    await page.getByRole("button", { name: /^add$/i }).click();
+    await page.waitForTimeout(300);
+
+    const handle = page.getByRole("button", { name: /drag housing subcategory/i });
+    const handleBox = await handle.boundingBox();
+    // The Wants card title sits inside the Wants drop zone
+    const wantsTitle = page.getByRole("button", { name: /rename wants/i });
+    const wantsBox = await wantsTitle.boundingBox();
+    expect(handleBox).not.toBeNull();
+    expect(wantsBox).not.toBeNull();
+    if (!handleBox || !wantsBox) return;
+
+    await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(
+      wantsBox.x + wantsBox.width / 2,
+      wantsBox.y + wantsBox.height / 2,
+      { steps: 10 },
+    );
+    await page.waitForTimeout(200);
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+
+    // Housing (and its Hydro item) now lives inside the Wants card
+    await expect(page.getByRole("button", { name: /collapse housing/i })).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText("Hydro").first()).toBeVisible();
+    // Wants rolls up Housing's subtree: no direct items, $500 from subcategories
+    await expect(page.getByText(/Direct: \$0\.00 · Subcategories: \$500\.00/)).toBeVisible();
+    // Needs is back to its own $2,000 with no rollup line
+    await expect(page.getByText("$2,000.00").first()).toBeVisible();
+  });
+
+  test("items in a subcategory roll up into the parent card total", async ({ page }) => {
+    await addSubcategory(page, "needs", "Housing");
+    await expect(page.getByRole("button", { name: /collapse housing/i })).toBeVisible({ timeout: 3000 });
+
+    // Add an item inside the subcategory (its "+ Add Item" comes first in DOM
+    // order, before the parent card's footer button)
+    await page.getByRole("button", { name: /^\+ add item$/i }).first().click();
+    await page.getByLabel("Label").fill("Hydro");
+    await page.getByLabel(/amount/i).fill("500");
+    await page.getByRole("button", { name: /^add$/i }).click();
+    await page.waitForTimeout(300);
+
+    // Needs header rolls up 2000 (Rent) + 500 (Hydro)
+    await expect(page.getByText("$2,500.00").first()).toBeVisible({ timeout: 3000 });
+    await expect(page.getByText(/Direct: \$2,000\.00/)).toBeVisible();
+  });
+
+  test("move a category under another via the command palette", async ({ page }) => {
+    await page.keyboard.press("ControlOrMeta+k");
+    const palette = page.getByRole("dialog");
+    await expect(palette).toBeVisible({ timeout: 3000 });
+
+    await palette.getByPlaceholder(/type a command/i).fill("move category");
+    await palette.getByRole("option", { name: /move category/i }).click();
+
+    // Pick Wants as the category to move
+    await palette.getByRole("option", { name: /^wants$/i }).click();
+
+    // Cycle-invalid destinations (Wants itself) are absent
+    await expect(palette.getByRole("option", { name: /^wants$/i })).toHaveCount(0);
+
+    // Move it under Needs
+    await palette.getByRole("option", { name: /^needs$/i }).click();
+    await page.waitForTimeout(300);
+
+    // Wants now renders as a collapsible section inside the Needs card
+    await expect(page.getByRole("button", { name: /collapse wants/i })).toBeVisible({ timeout: 3000 });
+  });
+
+  test("drag a top-level category card into another to nest it", async ({ page }) => {
+    const handle = page.getByRole("button", { name: /drag wants category/i });
+    await expect(handle).toBeVisible({ timeout: 5000 });
+    // The grid sits below the fold; mouse coords must be inside the viewport
+    await handle.scrollIntoViewIfNeeded();
+    const handleBox = await handle.boundingBox();
+    const needsTitle = page.getByRole("button", { name: /rename needs/i });
+    const needsBox = await needsTitle.boundingBox();
+    expect(handleBox).not.toBeNull();
+    expect(needsBox).not.toBeNull();
+    if (!handleBox || !needsBox) return;
+
+    await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(needsBox.x + needsBox.width / 2, needsBox.y + needsBox.height / 2, { steps: 10 });
+    await page.waitForTimeout(200);
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+
+    // Wants is now a subcategory card inside Needs
+    await expect(page.getByRole("button", { name: /collapse wants/i })).toBeVisible({ timeout: 3000 });
+    await expect(page.getByRole("button", { name: /drag wants subcategory/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /drag wants category/i })).toHaveCount(0);
+  });
+
+  test("drag a subcategory out into the wild to make it a top-level card", async ({ page }) => {
+    await addSubcategory(page, "needs", "Housing");
+    const handle = page.getByRole("button", { name: /drag housing subcategory/i });
+    await expect(handle).toBeVisible({ timeout: 3000 });
+    const handleBox = await handle.boundingBox();
+    expect(handleBox).not.toBeNull();
+    if (!handleBox) return;
+
+    // Start the drag; the top-level drop zone card appears once it activates
+    await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handleBox.x + handleBox.width / 2 + 12, handleBox.y + handleBox.height / 2 + 2, { steps: 3 });
+
+    const dropZone = page.getByText(/drop here to make it a top-level category/i);
+    await expect(dropZone).toBeVisible({ timeout: 3000 });
+    const zoneBox = await dropZone.boundingBox();
+    expect(zoneBox).not.toBeNull();
+    if (!zoneBox) return;
+
+    await page.mouse.move(zoneBox.x + zoneBox.width / 2, zoneBox.y + zoneBox.height / 2, { steps: 10 });
+    await page.waitForTimeout(200);
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+
+    // Housing is now its own top-level grid card
+    await expect(page.getByRole("button", { name: /drag housing category/i })).toBeVisible({ timeout: 3000 });
+    await expect(page.getByRole("button", { name: /collapse housing/i })).toHaveCount(0);
+  });
+
+  test("drops inside a parent's own area target the parent, not its subcategory", async ({ page }) => {
+    await addSubcategory(page, "needs", "Housing");
+    await expect(page.getByRole("button", { name: /collapse housing/i })).toBeVisible({ timeout: 3000 });
+
+    const rentHandle = page.getByRole("button", { name: /drag rent/i });
+    await rentHandle.scrollIntoViewIfNeeded();
+    // Keep both points mid-viewport so dnd-kit autoscroll stays out of the way
+    await page.evaluate(() => window.scrollBy(0, 200));
+
+    // Drop Rent onto the Needs card's own footer area — inside the parent
+    // card but outside the Housing sub-card. It must stay a direct item of
+    // Needs (previously the drop snapped to the nearest subcategory).
+    const needsFooter = page.getByRole("button", { name: /^\+ add item$/i }).nth(1);
+    let from = await rentHandle.boundingBox();
+    let to = await needsFooter.boundingBox();
+    expect(from).not.toBeNull();
+    expect(to).not.toBeNull();
+    if (!from || !to) return;
+    await dragBetween(page, from, to);
+
+    // No rollup split line: Needs' subtree total still equals its direct total
+    await expect(page.getByText(/Direct: /)).toHaveCount(0);
+
+    // Dropping onto the Housing card itself moves Rent into Housing.
+    const housingHeader = page.getByRole("button", { name: /collapse housing/i });
+    from = await rentHandle.boundingBox();
+    to = await housingHeader.boundingBox();
+    expect(from).not.toBeNull();
+    expect(to).not.toBeNull();
+    if (!from || !to) return;
+    await dragBetween(page, from, to);
+
+    await expect(page.getByText(/Direct: \$0\.00 · Subcategories: \$2,000\.00/)).toBeVisible({ timeout: 3000 });
+  });
+
+  test("palette pick lists show hierarchical path labels", async ({ page }) => {
+    await addSubcategory(page, "needs", "Housing");
+    await expect(page.getByRole("button", { name: /collapse housing/i })).toBeVisible({ timeout: 3000 });
+
+    await page.keyboard.press("ControlOrMeta+k");
+    const palette = page.getByRole("dialog");
+    await expect(palette).toBeVisible({ timeout: 3000 });
+
+    await palette.getByPlaceholder(/type a command/i).fill("rename category");
+    await palette.getByRole("option", { name: /rename category/i }).click();
+
+    await expect(palette.getByRole("option", { name: /needs › housing/i })).toBeVisible({ timeout: 3000 });
+
+    // Searching by the parent's name matches the child row too
+    await palette.getByPlaceholder(/choose a category to rename/i).fill("needs housing");
+    await expect(palette.getByRole("option", { name: /needs › housing/i })).toBeVisible();
+  });
+
+  test("hierarchy survives a page reload", async ({ page }) => {
+    await addSubcategory(page, "needs", "Housing");
+    await expect(page.getByRole("button", { name: /collapse housing/i })).toBeVisible({ timeout: 3000 });
+
+    // Persistence is debounced; give it a moment before reloading
+    await page.waitForTimeout(500);
+    await page.reload();
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.getByRole("button", { name: /collapse housing/i })).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole("button", { name: /rename needs/i })).toBeVisible();
   });
 });

@@ -23,6 +23,7 @@ import {
   Edit2,
   Sparkles,
   Check,
+  CornerDownRight,
   Tag,
   ArrowLeft,
   ArrowRightLeft,
@@ -31,10 +32,14 @@ import {
 } from "lucide-react";
 import { useBudget } from "@/lib/budget-context";
 import {
-  getSortedCategories,
+  getCategoriesInTreeOrder,
+  getCategoryPathLabel,
+  getDescendantCategoryIds,
   getSortedIncomeItems,
   getItemsForCategory,
   getCategoryById,
+  getEffectiveTarget,
+  wouldCreateCycle,
 } from "@/lib/budget-plan";
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -79,6 +84,7 @@ export function CommandPalette() {
     addCategory,
     renameCategory,
     deleteCategory,
+    moveCategory,
     updateCategoryTarget,
     clearAllData,
     isHydrated,
@@ -131,7 +137,14 @@ export function CommandPalette() {
     [mode.type, search, closePalette],
   );
 
-  const categories = getSortedCategories(state);
+  // Tree-ordered rows with "Needs › Housing" path labels; the labels feed the
+  // cmdk `value` strings too, so searches match on any ancestor name.
+  const categoryRows = getCategoriesInTreeOrder(state).map(({ category, depth }) => ({
+    category,
+    depth,
+    pathLabel: getCategoryPathLabel(state, category.id),
+  }));
+  const categories = categoryRows.map((row) => row.category);
   const incomeItems = getSortedIncomeItems(state);
   const unassignedItems = getItemsForCategory(state, null);
   const incomeColor = getIncomeColor(designLanguage);
@@ -155,6 +168,14 @@ export function CommandPalette() {
           break;
         case "add-category":
           setMode({ type: "add-category" });
+          setSearch("");
+          break;
+        case "add-subcategory":
+          setMode({ type: "add-subcategory-pick" });
+          setSearch("");
+          break;
+        case "move-category":
+          setMode({ type: "move-category-pick" });
           setSearch("");
           break;
         case "rename-category":
@@ -287,16 +308,16 @@ export function CommandPalette() {
           </Command.Group>
         )}
 
-        {categories.map((category) => {
+        {categoryRows.map(({ category, pathLabel }) => {
           const items = getItemsForCategory(state, category.id);
           if (items.length === 0) return null;
           const color = resolveCategoryColor(category.colorToken, category.sortOrder, designLanguage);
           return (
-            <Command.Group key={category.id} heading={category.name} className={groupClass}>
+            <Command.Group key={category.id} heading={pathLabel} className={groupClass}>
               {items.map((item) => (
                 <Command.Item
                   key={item.id}
-                  value={`${item.label} ${category.name}`}
+                  value={`${item.label} ${pathLabel}`}
                   onSelect={() => onSelectBudget(item)}
                   className={
                     action === "remove"
@@ -448,6 +469,14 @@ export function CommandPalette() {
                         </Command.Item>
                         {hasCategories && (
                           <>
+                            <Command.Item value="Add Subcategory" onSelect={() => handleSelect("add-subcategory")} className={itemClass}>
+                              <CornerDownRight className="size-4" />
+                              <span className="flex-1">Add subcategory…</span>
+                            </Command.Item>
+                            <Command.Item value="Move Category" onSelect={() => handleSelect("move-category")} className={itemClass}>
+                              <ArrowRightLeft className="size-4" />
+                              <span className="flex-1">Move category…</span>
+                            </Command.Item>
                             <Command.Item value="Rename Category" onSelect={() => handleSelect("rename-category")} className={itemClass}>
                               <Pencil className="size-4" />
                               <span className="flex-1">Rename category…</span>
@@ -568,17 +597,17 @@ export function CommandPalette() {
                   <motion.div key="add-pick" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }}>
                     {searchShell("Choose a category…", (
                       <>
-                        {categories.map((category) => {
+                        {categoryRows.map(({ category, pathLabel }) => {
                           const color = resolveCategoryColor(category.colorToken, category.sortOrder, designLanguage);
                           return (
                             <Command.Item
                               key={category.id}
-                              value={category.name}
+                              value={pathLabel}
                               onSelect={() => setMode({ type: "add", target: { type: "category", categoryId: category.id } })}
                               className={itemClass}
                             >
                               <Tag className="size-4" style={{ color }} />
-                              <span className="flex-1 truncate">{category.name}</span>
+                              <span className="flex-1 truncate">{pathLabel}</span>
                             </Command.Item>
                           );
                         })}
@@ -623,15 +652,15 @@ export function CommandPalette() {
                   <motion.div key="move-search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }}>
                     {searchShell("Search a budget to move…", (
                       <>
-                      {categories.map((category) => {
+                      {categoryRows.map(({ category, pathLabel }) => {
                         const items = getItemsForCategory(state, category.id);
                         if (items.length === 0) return null;
                         return (
-                          <Command.Group key={category.id} heading={category.name} className={groupClass}>
+                          <Command.Group key={category.id} heading={pathLabel} className={groupClass}>
                             {items.map((item) => (
                               <Command.Item
                                 key={item.id}
-                                value={`${item.label} ${category.name}`}
+                                value={`${item.label} ${pathLabel}`}
                                 onSelect={() => setMode({ type: "move-item-target", itemId: item.id, itemLabel: item.label })}
                                 className={itemClass}
                               >
@@ -677,17 +706,17 @@ export function CommandPalette() {
                     </div>
                     <Command.List className="max-h-[calc(min(500px,80vh)-3rem)] overflow-y-auto p-2">
                       <Command.Empty className="py-6 text-center text-sm text-muted-foreground">No categories found.</Command.Empty>
-                      {categories.map((category) => {
+                      {categoryRows.map(({ category, pathLabel }) => {
                         const color = resolveCategoryColor(category.colorToken, category.sortOrder, designLanguage);
                         return (
                           <Command.Item
                             key={category.id}
-                            value={category.name}
+                            value={pathLabel}
                             onSelect={() => { moveBudgetItem(mode.itemId, category.id); setMode({ type: "default" }); closePalette(); }}
                             className={itemClass}
                           >
                             <Tag className="size-4" style={{ color }} />
-                            <span className="flex-1 truncate">{category.name}</span>
+                            <span className="flex-1 truncate">{pathLabel}</span>
                           </Command.Item>
                         );
                       })}
@@ -712,14 +741,127 @@ export function CommandPalette() {
                   />
                 )}
 
+                {/* Add subcategory: pick the parent */}
+                {mode.type === "add-subcategory-pick" && (
+                  <motion.div key="add-sub-pick" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }}>
+                    {searchShell("Choose a parent category…", (
+                      <>
+                        {categoryRows.map(({ category, pathLabel }) => {
+                          const color = resolveCategoryColor(category.colorToken, category.sortOrder, designLanguage);
+                          return (
+                            <Command.Item
+                              key={category.id}
+                              value={pathLabel}
+                              onSelect={() => { setMode({ type: "add-subcategory", parentId: category.id, parentLabel: pathLabel }); setSearch(""); }}
+                              className={itemClass}
+                            >
+                              <Tag className="size-4" style={{ color }} />
+                              <span className="flex-1 truncate">{pathLabel}</span>
+                            </Command.Item>
+                          );
+                        })}
+                      </>
+                    ))}
+                  </motion.div>
+                )}
+
+                {mode.type === "add-subcategory" && (
+                  <CategoryNameForm
+                    key={`add-subcategory-${mode.parentId}`}
+                    mode="add"
+                    title={`Add Subcategory to ${mode.parentLabel}`}
+                    onSubmit={(name) => {
+                      addCategory(name, { parentCategoryId: mode.parentId });
+                      setMode({ type: "default" });
+                      closePalette();
+                    }}
+                    onCancel={() => setMode({ type: "add-subcategory-pick" })}
+                  />
+                )}
+
+                {/* Move category: pick the category to move */}
+                {mode.type === "move-category-pick" && (
+                  <motion.div key="move-cat-pick" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }}>
+                    {searchShell("Choose a category to move…", (
+                      <>
+                        {categoryRows.map(({ category, pathLabel }) => {
+                          const color = resolveCategoryColor(category.colorToken, category.sortOrder, designLanguage);
+                          return (
+                            <Command.Item
+                              key={category.id}
+                              value={pathLabel}
+                              onSelect={() => { setMode({ type: "move-category-target", categoryId: category.id, categoryLabel: pathLabel }); setSearch(""); }}
+                              className={itemClass}
+                            >
+                              <Tag className="size-4" style={{ color }} />
+                              <span className="flex-1 truncate">{pathLabel}</span>
+                            </Command.Item>
+                          );
+                        })}
+                      </>
+                    ))}
+                  </motion.div>
+                )}
+
+                {/* Move category: pick the destination (cycle-safe) */}
+                {mode.type === "move-category-target" && (() => {
+                  const moving = getCategoryById(state, mode.categoryId);
+                  const currentParent = moving?.parentCategoryId ?? null;
+                  const destinations = categoryRows.filter(
+                    ({ category }) =>
+                      category.id !== mode.categoryId &&
+                      category.id !== currentParent &&
+                      !wouldCreateCycle(state.categories, mode.categoryId, category.id),
+                  );
+                  return (
+                    <motion.div key="move-cat-target" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }}>
+                      <div className="flex items-center border-b border-border px-3">
+                        <button onClick={() => setMode({ type: "move-category-pick" })} className="p-1 hover:bg-muted rounded-md transition-colors mr-2" aria-label="Go back">
+                          <ArrowLeft className="size-4" />
+                        </button>
+                        <Search className="size-4 text-muted-foreground shrink-0" />
+                        <Command.Input value={search} onValueChange={setSearch} placeholder={`Move “${mode.categoryLabel}” under…`} className="flex-1 h-12 px-3 bg-transparent text-base outline-none placeholder:text-muted-foreground" autoFocus />
+                        <KeyboardShortcut shortcut="ESC" />
+                      </div>
+                      <Command.List className="max-h-[calc(min(500px,80vh)-3rem)] overflow-y-auto p-2">
+                        <Command.Empty className="py-6 text-center text-sm text-muted-foreground">No destinations found.</Command.Empty>
+                        {currentParent !== null && (
+                          <Command.Item
+                            value="Top level"
+                            onSelect={() => { moveCategory(mode.categoryId, null); setMode({ type: "default" }); closePalette(); }}
+                            className={itemClass}
+                          >
+                            <Inbox className="size-4 text-muted-foreground" />
+                            <span className="flex-1">Top level</span>
+                          </Command.Item>
+                        )}
+                        {destinations.map(({ category, pathLabel }) => {
+                          const color = resolveCategoryColor(category.colorToken, category.sortOrder, designLanguage);
+                          return (
+                            <Command.Item
+                              key={category.id}
+                              value={pathLabel}
+                              onSelect={() => { moveCategory(mode.categoryId, category.id); setMode({ type: "default" }); closePalette(); }}
+                              className={itemClass}
+                            >
+                              <Tag className="size-4" style={{ color }} />
+                              <span className="flex-1 truncate">{pathLabel}</span>
+                            </Command.Item>
+                          );
+                        })}
+                      </Command.List>
+                    </motion.div>
+                  );
+                })()}
+
                 {mode.type === "rename-category-pick" && (
                   <motion.div key="rename-pick" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }}>
                     {searchShell("Choose a category to rename…", (
                       <>
-                        {categories.map((category) => (
-                          <Command.Item key={category.id} value={category.name} onSelect={() => setMode({ type: "rename-category", categoryId: category.id })} className={itemClass}>
+                        {categoryRows.map(({ category, pathLabel }) => (
+                          <Command.Item key={category.id} value={pathLabel} onSelect={() => setMode({ type: "rename-category", categoryId: category.id })} className={itemClass}>
                             <Pencil className="size-4" />
-                            <span className="flex-1 truncate">{category.name}</span>
+                            <span className="flex-1 truncate">{pathLabel}</span>
                           </Command.Item>
                         ))}
                       </>
@@ -741,13 +883,19 @@ export function CommandPalette() {
                   <motion.div key="target-pick" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }}>
                     {searchShell("Choose a category…", (
                       <>
-                        {categories.map((category) => (
-                          <Command.Item key={category.id} value={category.name} onSelect={() => setMode({ type: "set-target", categoryId: category.id })} className={itemClass}>
-                            <Target className="size-4" />
-                            <span className="flex-1 truncate">{category.name}</span>
-                            <span className="text-sm text-muted-foreground font-mono">{category.targetPercentage}%</span>
-                          </Command.Item>
-                        ))}
+                        {categoryRows.map(({ category, pathLabel }) => {
+                          const effective = getEffectiveTarget(state, category.id);
+                          return (
+                            <Command.Item key={category.id} value={pathLabel} onSelect={() => setMode({ type: "set-target", categoryId: category.id })} className={itemClass}>
+                              <Target className="size-4" />
+                              <span className="flex-1 truncate">{pathLabel}</span>
+                              <span className="text-sm text-muted-foreground font-mono">
+                                {category.targetPercentage}%
+                                {effective !== category.targetPercentage ? ` (${effective}%)` : ""}
+                              </span>
+                            </Command.Item>
+                          );
+                        })}
                       </>
                     ))}
                   </motion.div>
@@ -767,19 +915,36 @@ export function CommandPalette() {
                   <motion.div key="delete-pick" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }}>
                     {searchShell("Choose a category to delete…", (
                       <>
-                        {categories.map((category) => {
+                        {categoryRows.map(({ category, pathLabel }) => {
                           const count = getItemsForCategory(state, category.id).length;
+                          const descendantCount = getDescendantCategoryIds(state.categories, category.id).length;
+                          const infoParts = [
+                            descendantCount > 0
+                              ? `${descendantCount} subcategor${descendantCount === 1 ? "y" : "ies"}`
+                              : null,
+                            count > 0 ? `${count} item${count === 1 ? "" : "s"} → Unassigned` : null,
+                          ].filter(Boolean);
                           return (
                             <Command.Item
                               key={category.id}
-                              value={category.name}
-                              onSelect={() => { deleteCategory(category.id, "keep"); if (categories.length === 1) setMode({ type: "default" }); }}
+                              value={pathLabel}
+                              onSelect={() => {
+                                // Leaf categories delete immediately (items kept
+                                // as Unassigned); parents need a child choice.
+                                if (descendantCount > 0) {
+                                  setMode({ type: "delete-category-confirm", categoryId: category.id });
+                                  setSearch("");
+                                  return;
+                                }
+                                deleteCategory(category.id, "keep");
+                                if (categories.length === 1) setMode({ type: "default" });
+                              }}
                               className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-destructive/10 aria-selected:text-destructive"
                             >
                               <Trash2 className="size-4" />
-                              <span className="flex-1 truncate">{category.name}</span>
+                              <span className="flex-1 truncate">{pathLabel}</span>
                               <span className="text-xs text-muted-foreground">
-                                {count > 0 ? `${count} item${count === 1 ? "" : "s"} → Unassigned` : "empty"}
+                                {infoParts.length > 0 ? infoParts.join(" · ") : "empty"}
                               </span>
                             </Command.Item>
                           );
@@ -788,6 +953,49 @@ export function CommandPalette() {
                     ))}
                   </motion.div>
                 )}
+
+                {/* Delete a category that has subcategories: choose what happens to them */}
+                {mode.type === "delete-category-confirm" && (() => {
+                  const target = getCategoryById(state, mode.categoryId);
+                  if (!target) return null;
+                  const descendantCount = getDescendantCategoryIds(state.categories, mode.categoryId).length;
+                  return (
+                    <motion.div key="delete-confirm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }}>
+                      <div className="flex items-center border-b border-border px-3 h-12">
+                        <button onClick={() => setMode({ type: "delete-category-pick" })} className="p-1 hover:bg-muted rounded-md transition-colors mr-2" aria-label="Go back">
+                          <ArrowLeft className="size-4" />
+                        </button>
+                        <span className="text-sm font-medium truncate">
+                          Delete “{getCategoryPathLabel(state, mode.categoryId)}” — {descendantCount} subcategor{descendantCount === 1 ? "y" : "ies"}
+                        </span>
+                      </div>
+                      <Command.List className="max-h-[calc(min(500px,80vh)-3rem)] overflow-y-auto p-2">
+                        <Command.Item
+                          value="Promote subcategories up a level"
+                          onSelect={() => { deleteCategory(mode.categoryId, "keep", "promote"); setMode({ type: "default" }); closePalette(); }}
+                          className={itemClass}
+                        >
+                          <CornerDownRight className="size-4" />
+                          <div className="flex-1 min-w-0">
+                            <span className="block">Promote subcategories up a level</span>
+                            <span className="block text-xs text-muted-foreground">Its own items move to Unassigned</span>
+                          </div>
+                        </Command.Item>
+                        <Command.Item
+                          value="Delete whole subtree"
+                          onSelect={() => { deleteCategory(mode.categoryId, "keep", "delete-subtree"); setMode({ type: "default" }); closePalette(); }}
+                          className="flex items-center gap-3 px-2 py-2.5 rounded-lg cursor-pointer aria-selected:bg-destructive/10 aria-selected:text-destructive"
+                        >
+                          <Trash2 className="size-4" />
+                          <div className="flex-1 min-w-0">
+                            <span className="block">Delete the whole subtree</span>
+                            <span className="block text-xs text-muted-foreground">All subtree items move to Unassigned</span>
+                          </div>
+                        </Command.Item>
+                      </Command.List>
+                    </motion.div>
+                  );
+                })()}
 
                 {mode.type === "confirm-clear" && (
                   <ClearConfirmation key="confirm-clear" onConfirm={handleClearConfirm} onCancel={() => setMode({ type: "default" })} />
